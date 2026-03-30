@@ -1,0 +1,176 @@
+use axum::{
+    http::{header, Method},
+    middleware,
+    routing::{delete, get, post, put},
+    Router,
+};
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
+
+use crate::handlers::{
+    BillStatementHandler, CategoryHandler, ExpenseHandler, PaymentMethodHandler,
+    RecurrenceTypeHandler,
+};
+use crate::middleware::{auth_middleware, AuthState};
+
+pub fn create_router(
+    expense_handler: ExpenseHandler,
+    payment_method_handler: PaymentMethodHandler,
+    category_handler: CategoryHandler,
+    bill_statement_handler: BillStatementHandler,
+    recurrence_type_handler: RecurrenceTypeHandler,
+    auth_state: AuthState,
+) -> Router {
+    // Configure CORS
+    let frontend_url =
+        std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
+
+    let cors = CorsLayer::new()
+        .allow_origin(frontend_url.parse::<axum::http::HeaderValue>().unwrap())
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers([
+            header::AUTHORIZATION,
+            header::CONTENT_TYPE,
+            header::ACCEPT,
+            header::ORIGIN,
+        ])
+        .allow_credentials(true);
+
+    // ========== Public Routes ==========
+    let public_routes = Router::new().route("/health", get(health_check));
+
+    // ========== Protected Expense Routes ==========
+    let protected_expense_routes = Router::new()
+        .route("/expenses", post(ExpenseHandler::create))
+        .route("/expenses", get(ExpenseHandler::get_all))
+        .route("/expenses/:id", get(ExpenseHandler::get_by_id))
+        .route("/expenses/:id", put(ExpenseHandler::update))
+        .route("/expenses/:id", delete(ExpenseHandler::delete))
+        .with_state(expense_handler)
+        .layer(middleware::from_fn_with_state(
+            auth_state.clone(),
+            auth_middleware,
+        ));
+
+    // ========== Protected Payment Method Routes ==========
+    let protected_payment_method_routes = Router::new()
+        .route("/payment-methods", post(PaymentMethodHandler::create))
+        .route("/payment-methods", get(PaymentMethodHandler::get_all))
+        .route("/payment-methods/:id", get(PaymentMethodHandler::get_by_id))
+        .route("/payment-methods/:id", put(PaymentMethodHandler::update))
+        .route("/payment-methods/:id", delete(PaymentMethodHandler::delete))
+        .with_state(payment_method_handler)
+        .layer(middleware::from_fn_with_state(
+            auth_state.clone(),
+            auth_middleware,
+        ));
+
+    // ========== Protected Category Routes ==========
+    let protected_category_routes = Router::new()
+        .route("/categories", post(CategoryHandler::create))
+        .route("/categories", get(CategoryHandler::get_all))
+        .route("/categories/:id", get(CategoryHandler::get_by_id))
+        .route("/categories/:id", put(CategoryHandler::update))
+        .route("/categories/:id", delete(CategoryHandler::delete))
+        .with_state(category_handler)
+        .layer(middleware::from_fn_with_state(
+            auth_state.clone(),
+            auth_middleware,
+        ));
+
+    // ========== Protected Bill Statement Routes ==========
+    let protected_bill_statement_routes = Router::new()
+        .route("/bill-statements", post(BillStatementHandler::create))
+        .route("/bill-statements", get(BillStatementHandler::get_all))
+        .route("/bill-statements/:id", get(BillStatementHandler::get_by_id))
+        .route("/bill-statements/:id", put(BillStatementHandler::update))
+        .route("/bill-statements/:id", delete(BillStatementHandler::delete))
+        .with_state(bill_statement_handler)
+        .layer(middleware::from_fn_with_state(
+            auth_state.clone(),
+            auth_middleware,
+        ));
+
+    // ========== Protected Recurrence Type Routes ==========
+    let protected_recurrence_type_routes = Router::new()
+        .route("/recurrence-types", post(RecurrenceTypeHandler::create))
+        .route("/recurrence-types", get(RecurrenceTypeHandler::get_all))
+        .route(
+            "/recurrence-types/:id",
+            get(RecurrenceTypeHandler::get_by_id),
+        )
+        .route("/recurrence-types/:id", put(RecurrenceTypeHandler::update))
+        .route(
+            "/recurrence-types/:id",
+            delete(RecurrenceTypeHandler::delete),
+        )
+        .with_state(recurrence_type_handler)
+        .layer(middleware::from_fn_with_state(
+            auth_state.clone(),
+            auth_middleware,
+        ));
+
+    Router::new()
+        .nest("/api/v1", public_routes)
+        .nest("/api/v1", protected_expense_routes)
+        .nest("/api/v1", protected_payment_method_routes)
+        .nest("/api/v1", protected_category_routes)
+        .nest("/api/v1", protected_bill_statement_routes)
+        .nest("/api/v1", protected_recurrence_type_routes)
+        .layer(cors)
+        .layer(TraceLayer::new_for_http())
+}
+
+/// Health check endpoint
+async fn health_check() -> &'static str {
+    "OK"
+}
+
+// ========== Route Helpers ==========
+// Use these helpers to create consistent route patterns for your entities
+
+/// Creates a standard CRUD router for an entity
+///
+/// Example usage:
+/// ```rust
+/// let product_routes = create_crud_routes(
+///     "/products",
+///     ProductHandler::create,
+///     ProductHandler::get_all,
+///     ProductHandler::get_by_id,
+///     ProductHandler::update,
+///     ProductHandler::delete,
+///     product_handler,
+/// );
+/// ```
+#[allow(dead_code)]
+pub fn create_crud_routes<H, C, GA, GI, U, D>(
+    base_path: &str,
+    create_handler: C,
+    get_all_handler: GA,
+    get_by_id_handler: GI,
+    update_handler: U,
+    delete_handler: D,
+    handler_state: H,
+) -> Router
+where
+    H: Clone + Send + Sync + 'static,
+    C: axum::handler::Handler<(), H> + Clone + Send + 'static,
+    GA: axum::handler::Handler<(), H> + Clone + Send + 'static,
+    GI: axum::handler::Handler<(), H> + Clone + Send + 'static,
+    U: axum::handler::Handler<(), H> + Clone + Send + 'static,
+    D: axum::handler::Handler<(), H> + Clone + Send + 'static,
+{
+    Router::new()
+        .route(base_path, post(create_handler))
+        .route(base_path, get(get_all_handler))
+        .route(&format!("{}/:id", base_path), get(get_by_id_handler))
+        .route(&format!("{}/:id", base_path), put(update_handler))
+        .route(&format!("{}/:id", base_path), delete(delete_handler))
+        .with_state(handler_state)
+}

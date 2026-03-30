@@ -1,0 +1,433 @@
+{
+  "info": {
+    "name": "Expense Tracker API",
+    "description": "API collection for Expense Tracker Backend",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "expense-tracker",
+      "value": "http://localhost:8000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "your-auth-token",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "{{expense-tracker}}/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Expenses",
+      "item": [
+        {
+          "name": "Create Expense",
+          "request": {
+            "method": "POST",
+            "url": "{{expense-tracker}}/expenses",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Lunch\",\n  \"amount\": \"50000\",\n  \"payment_method_id\": \"YOUR_PAYMENT_METHOD_ID\",\n  \"expense_date\": \"2026-01-01T12:00:00Z\",\n  \"description\": \"Makan siang\",\n  \"bill_statement_id\": \"YOUR_BILL_STATEMENT_ID\",\n  \"category_id\": \"YOUR_CATEGORY_ID\",\n  \"paid_by\": \"Wikra\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Installment",
+          "request": {
+            "method": "POST",
+            "url": "{{expense-tracker}}/expenses",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"iPhone 16 Pro\",\n  \"amount\": \"1500000\",\n  \"payment_method_id\": \"YOUR_PAYMENT_METHOD_ID\",\n  \"expense_date\": \"2026-01-15T00:00:00Z\",\n  \"description\": \"Cicilan HP\",\n  \"bill_statement_id\": \"YOUR_BILL_STATEMENT_ID\",\n  \"category_id\": \"YOUR_CATEGORY_ID\",\n  \"recurrence_type_id\": \"YOUR_RECURRENCE_TYPE_ID\",\n  \"recurrence_type\": \"installment\",\n  \"recurrence_count\": 12,\n  \"recurrence_total_amount\": \"18000000\",\n  \"paid_by\": \"Wikra\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Subscription",
+          "request": {
+            "method": "POST",
+            "url": "{{expense-tracker}}/expenses",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Netflix Premium\",\n  \"amount\": \"199000\",\n  \"payment_method_id\": \"YOUR_PAYMENT_METHOD_ID\",\n  \"expense_date\": \"2026-01-05T00:00:00Z\",\n  \"description\": \"Streaming subscription\",\n  \"bill_statement_id\": \"YOUR_BILL_STATEMENT_ID\",\n  \"category_id\": \"YOUR_CATEGORY_ID\",\n  \"recurrence_type_id\": \"YOUR_RECURRENCE_TYPE_ID\",\n  \"recurrence_type\": \"subscription\",\n  \"recurrence_end_date\": \"2026-12-31T00:00:00Z\",\n  \"paid_by\": \"Wikra\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Recurring",
+          "request": {
+            "method": "POST",
+            "url": "{{expense-tracker}}/expenses",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Internet Biznet\",\n  \"amount\": \"500000\",\n  \"payment_method_id\": \"YOUR_PAYMENT_METHOD_ID\",\n  \"expense_date\": \"2026-01-20T00:00:00Z\",\n  \"description\": \"Tagihan internet bulanan\",\n  \"bill_statement_id\": \"YOUR_BILL_STATEMENT_ID\",\n  \"category_id\": \"YOUR_CATEGORY_ID\",\n  \"recurrence_type_id\": \"YOUR_RECURRENCE_TYPE_ID\",\n  \"recurrence_type\": \"recurring\",\n  \"recurrence_end_date\": \"2026-12-31T00:00:00Z\",\n  \"paid_by\": \"Wikra\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List Expenses",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{expense-tracker}}/expenses?page=1&page_size=10",
+              "host": ["{{expense-tracker}}"],
+              "path": ["expenses"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "page_size", "value": "10" },
+                { "key": "expense_date_from", "value": "", "disabled": true },
+                { "key": "expense_date_to", "value": "", "disabled": true },
+                { "key": "payment_method", "value": "", "disabled": true },
+                { "key": "status", "value": "", "disabled": true },
+                { "key": "paid_by", "value": "", "disabled": true },
+                { "key": "sort_by", "value": "expense_date", "disabled": true },
+                { "key": "sort_order", "value": "desc", "disabled": true }
+              ]
+            },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        },
+        {
+          "name": "Get Expense by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{expense-tracker}}/expenses/:id",
+            "variable": [{ "key": "id", "value": "expense-id-here" }],
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        },
+        {
+          "name": "Update Expense",
+          "request": {
+            "method": "PUT",
+            "url": "{{expense-tracker}}/expenses/:id",
+            "variable": [{ "key": "id", "value": "expense-id-here" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"paid\",\n  \"bill_statement_id\": \"YOUR_BILL_STATEMENT_ID\",\n  \"recurrence_type_id\": \"YOUR_RECURRENCE_TYPE_ID\",\n  \"recurrence_group_id\": \"YOUR_RECURRENCE_GROUP_ID\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Expense",
+          "request": {
+            "method": "DELETE",
+            "url": "{{expense-tracker}}/expenses/:id",
+            "variable": [{ "key": "id", "value": "expense-id-here" }],
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payment Methods",
+      "item": [
+        {
+          "name": "Create Payment Method",
+          "request": {
+            "method": "POST",
+            "url": "{{expense-tracker}}/payment-methods",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"BCA Credit Card\",\n  \"method_type\": \"credit_card\",\n  \"description\": \"BCA Mastercard\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List Payment Methods",
+          "request": {
+            "method": "GET",
+            "url": "{{expense-tracker}}/payment-methods",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        },
+        {
+          "name": "Get Payment Method by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{expense-tracker}}/payment-methods/:id",
+            "variable": [{ "key": "id", "value": "pm-id-here" }],
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        },
+        {
+          "name": "Update Payment Method",
+          "request": {
+            "method": "PUT",
+            "url": "{{expense-tracker}}/payment-methods/:id",
+            "variable": [{ "key": "id", "value": "pm-id-here" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Name\",\n  \"is_active\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Payment Method",
+          "request": {
+            "method": "DELETE",
+            "url": "{{expense-tracker}}/payment-methods/:id",
+            "variable": [{ "key": "id", "value": "pm-id-here" }],
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "Create Category",
+          "request": {
+            "method": "POST",
+            "url": "{{expense-tracker}}/categories",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Transportation\",\n  \"icon\": \"🚗\",\n  \"color\": \"#3B82F6\",\n  \"description\": \"Grab, Gojek, taxi\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List Categories",
+          "request": {
+            "method": "GET",
+            "url": "{{expense-tracker}}/categories",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        },
+        {
+          "name": "Get Category by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{expense-tracker}}/categories/:id",
+            "variable": [{ "key": "id", "value": "cat-id-here" }],
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        },
+        {
+          "name": "Update Category",
+          "request": {
+            "method": "PUT",
+            "url": "{{expense-tracker}}/categories/:id",
+            "variable": [{ "key": "id", "value": "cat-id-here" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Name\",\n  \"is_active\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Category",
+          "request": {
+            "method": "DELETE",
+            "url": "{{expense-tracker}}/categories/:id",
+            "variable": [{ "key": "id", "value": "cat-id-here" }],
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Bill Statements",
+      "item": [
+        {
+          "name": "Create Bill Statement",
+          "request": {
+            "method": "POST",
+            "url": "{{expense-tracker}}/bill-statements",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"January 2026\",\n  \"payment_method_id\": \"YOUR_PAYMENT_METHOD_ID\",\n  \"statement_date\": \"2026-01-01T00:00:00Z\",\n  \"due_date\": \"2026-01-31T00:00:00Z\",\n  \"description\": \"Monthly statement\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List Bill Statements",
+          "request": {
+            "method": "GET",
+            "url": "{{expense-tracker}}/bill-statements",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        },
+        {
+          "name": "Get Bill Statement by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{expense-tracker}}/bill-statements/:id",
+            "variable": [{ "key": "id", "value": "bs-id-here" }],
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        },
+        {
+          "name": "Update Bill Statement",
+          "request": {
+            "method": "PUT",
+            "url": "{{expense-tracker}}/bill-statements/:id",
+            "variable": [{ "key": "id", "value": "bs-id-here" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Name\",\n  \"is_active\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Bill Statement",
+          "request": {
+            "method": "DELETE",
+            "url": "{{expense-tracker}}/bill-statements/:id",
+            "variable": [{ "key": "id", "value": "bs-id-here" }],
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Recurrence Types",
+      "item": [
+        {
+          "name": "Create Recurrence Type",
+          "request": {
+            "method": "POST",
+            "url": "{{expense-tracker}}/recurrence-types",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Installment\",\n  \"description\": \"Fixed number of payments\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List Recurrence Types",
+          "request": {
+            "method": "GET",
+            "url": "{{expense-tracker}}/recurrence-types",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        },
+        {
+          "name": "Get Recurrence Type by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{expense-tracker}}/recurrence-types/:id",
+            "variable": [{ "key": "id", "value": "rt-id-here" }],
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        },
+        {
+          "name": "Update Recurrence Type",
+          "request": {
+            "method": "PUT",
+            "url": "{{expense-tracker}}/recurrence-types/:id",
+            "variable": [{ "key": "id", "value": "rt-id-here" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Name\",\n  \"is_active\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Recurrence Type",
+          "request": {
+            "method": "DELETE",
+            "url": "{{expense-tracker}}/recurrence-types/:id",
+            "variable": [{ "key": "id", "value": "rt-id-here" }],
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
