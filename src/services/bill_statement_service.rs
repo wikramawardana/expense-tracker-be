@@ -23,7 +23,7 @@ impl BillStatementService {
             .validate()
             .map_err(|e| AppError::Validation(e.to_string()))?;
 
-        let now = Utc::now();
+        let now = Utc::now().to_rfc3339();
         let bs = BillStatement {
             id: Uuid::new_v4().to_string(),
             name: request.name,
@@ -32,7 +32,7 @@ impl BillStatementService {
             due_date: request.due_date,
             description: request.description,
             is_active: true,
-            created_at: now,
+            created_at: now.clone(),
             updated_at: now,
         };
 
@@ -74,7 +74,7 @@ impl BillStatementService {
             bs.is_active = is_active;
         }
 
-        bs.updated_at = Utc::now();
+        bs.updated_at = Utc::now().to_rfc3339();
         self.repository.update(id, bs).await
     }
 

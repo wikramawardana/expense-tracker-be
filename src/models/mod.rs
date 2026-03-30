@@ -1,3 +1,12 @@
+/// Extract the ID from a SurrealDB record ID string like "table:`uuid`" or "table:key".
+pub fn extract_id(id: &str) -> String {
+    id.split(':')
+        .last()
+        .unwrap_or(id)
+        .trim_matches('`')
+        .to_string()
+}
+
 pub mod response;
 pub use response::ApiResponse;
 

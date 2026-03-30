@@ -53,6 +53,3 @@ figlet-rs = "0.1.5"
 
 # Async utilities
 async-trait = "0.1"
-
-# Decimal for monetary amounts
-rust_decimal = { version = "1.33", features = ["serde", "serde-with-str"] }

@@ -1,34 +1,16 @@
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Deserializer, Serialize};
-use surrealdb::sql::{Id, Thing};
+use serde::{Deserialize, Serialize};
+use surrealdb::types::SurrealValue;
 use validator::Validate;
 
-// Helper to deserialize SurrealDB Thing ID to String
-fn deserialize_id<'de, D>(deserializer: D) -> Result<String, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let t = Thing::deserialize(deserializer)?;
-    match t.id {
-        Id::String(s) => Ok(s),
-        _ => Ok(t.id.to_string()),
-    }
-}
-
-// ========== Main Entity ==========
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, SurrealValue)]
 pub struct RecurrenceType {
-    #[serde(deserialize_with = "deserialize_id")]
     pub id: String,
-    pub name: String, // e.g., "None", "Installment", "Subscription", "Recurring"
+    pub name: String,
     pub description: Option<String>,
     pub is_active: bool,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: String,
+    pub updated_at: String,
 }
-
-// ========== Request DTOs ==========
 
 #[derive(Debug, Deserialize, Validate)]
 pub struct CreateRecurrenceTypeRequest {
@@ -44,8 +26,6 @@ pub struct UpdateRecurrenceTypeRequest {
     pub is_active: Option<bool>,
 }
 
-// ========== Response DTOs ==========
-
 #[derive(Debug, Serialize)]
 pub struct RecurrenceTypeResponse {
     pub id: String,
@@ -59,12 +39,12 @@ pub struct RecurrenceTypeResponse {
 impl From<RecurrenceType> for RecurrenceTypeResponse {
     fn from(rt: RecurrenceType) -> Self {
         RecurrenceTypeResponse {
-            id: rt.id,
+            id: crate::models::extract_id(&rt.id),
             name: rt.name,
             description: rt.description,
             is_active: rt.is_active,
-            created_at: rt.created_at.to_rfc3339(),
-            updated_at: rt.updated_at.to_rfc3339(),
+            created_at: rt.created_at,
+            updated_at: rt.updated_at,
         }
     }
 }

@@ -21,7 +21,7 @@ impl CategoryService {
             .validate()
             .map_err(|e| AppError::Validation(e.to_string()))?;
 
-        let now = Utc::now();
+        let now = Utc::now().to_rfc3339();
         let category = Category {
             id: Uuid::new_v4().to_string(),
             name: request.name,
@@ -29,7 +29,7 @@ impl CategoryService {
             color: request.color,
             description: request.description,
             is_active: true,
-            created_at: now,
+            created_at: now.clone(),
             updated_at: now,
         };
 
@@ -64,7 +64,7 @@ impl CategoryService {
             category.is_active = is_active;
         }
 
-        category.updated_at = Utc::now();
+        category.updated_at = Utc::now().to_rfc3339();
         self.repository.update(id, category).await
     }
 

@@ -1,6 +1,7 @@
 use crate::db::Database;
 use crate::errors::{AppError, AppResult};
 use crate::models::{Expense, ExpenseQueryParams, ExpenseStatus};
+use surrealdb::types::SurrealValue;
 
 #[derive(Clone)]
 pub struct ExpenseRepository {
@@ -38,14 +39,14 @@ impl ExpenseRepository {
             conditions.push("expense_date >= $date_from".to_string());
             bindings.push((
                 "date_from".to_string(),
-                serde_json::json!(date_from.to_rfc3339()),
+                serde_json::json!(date_from),
             ));
         }
         if let Some(date_to) = &query.expense_date_to {
             conditions.push("expense_date <= $date_to".to_string());
             bindings.push((
                 "date_to".to_string(),
-                serde_json::json!(date_to.to_rfc3339()),
+                serde_json::json!(date_to),
             ));
         }
 
@@ -135,14 +136,14 @@ impl ExpenseRepository {
             conditions.push("expense_date >= $date_from".to_string());
             bindings.push((
                 "date_from".to_string(),
-                serde_json::json!(date_from.to_rfc3339()),
+                serde_json::json!(date_from),
             ));
         }
         if let Some(date_to) = &query.expense_date_to {
             conditions.push("expense_date <= $date_to".to_string());
             bindings.push((
                 "date_to".to_string(),
-                serde_json::json!(date_to.to_rfc3339()),
+                serde_json::json!(date_to),
             ));
         }
         if let Some(payment_method) = &query.payment_method {
@@ -185,7 +186,7 @@ impl ExpenseRepository {
         let mut result = stmt.await?;
 
         // SurrealDB returns count as an object with "count" field
-        #[derive(serde::Deserialize)]
+        #[derive(serde::Deserialize, SurrealValue)]
         struct CountResult {
             count: u32,
         }

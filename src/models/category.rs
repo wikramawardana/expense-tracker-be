@@ -1,35 +1,18 @@
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Deserializer, Serialize};
-use surrealdb::sql::{Id, Thing};
+use serde::{Deserialize, Serialize};
+use surrealdb::types::SurrealValue;
 use validator::Validate;
 
-fn deserialize_id<'de, D>(deserializer: D) -> Result<String, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let t = Thing::deserialize(deserializer)?;
-    match t.id {
-        Id::String(s) => Ok(s),
-        _ => Ok(t.id.to_string()),
-    }
-}
-
-// ========== Main Entity ==========
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, SurrealValue)]
 pub struct Category {
-    #[serde(deserialize_with = "deserialize_id")]
     pub id: String,
-    pub name: String,          // e.g., "Transportation", "E-commerce", "F&B"
-    pub icon: Option<String>,  // Optional icon name/emoji
-    pub color: Option<String>, // Optional hex color for UI
+    pub name: String,
+    pub icon: Option<String>,
+    pub color: Option<String>,
     pub description: Option<String>,
     pub is_active: bool,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: String,
+    pub updated_at: String,
 }
-
-// ========== Request DTOs ==========
 
 #[derive(Debug, Deserialize, Validate)]
 pub struct CreateCategoryRequest {
@@ -49,8 +32,6 @@ pub struct UpdateCategoryRequest {
     pub is_active: Option<bool>,
 }
 
-// ========== Response DTOs ==========
-
 #[derive(Debug, Serialize)]
 pub struct CategoryResponse {
     pub id: String,
@@ -66,14 +47,14 @@ pub struct CategoryResponse {
 impl From<Category> for CategoryResponse {
     fn from(cat: Category) -> Self {
         CategoryResponse {
-            id: cat.id,
+            id: crate::models::extract_id(&cat.id),
             name: cat.name,
             icon: cat.icon,
             color: cat.color,
             description: cat.description,
             is_active: cat.is_active,
-            created_at: cat.created_at.to_rfc3339(),
-            updated_at: cat.updated_at.to_rfc3339(),
+            created_at: cat.created_at,
+            updated_at: cat.updated_at,
         }
     }
 }

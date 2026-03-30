@@ -23,14 +23,14 @@ impl PaymentMethodService {
             .validate()
             .map_err(|e| AppError::Validation(e.to_string()))?;
 
-        let now = Utc::now();
+        let now = Utc::now().to_rfc3339();
         let pm = PaymentMethod {
             id: Uuid::new_v4().to_string(),
             name: request.name,
             method_type: request.method_type,
             description: request.description,
             is_active: true,
-            created_at: now,
+            created_at: now.clone(),
             updated_at: now,
         };
 
@@ -66,7 +66,7 @@ impl PaymentMethodService {
             pm.is_active = is_active;
         }
 
-        pm.updated_at = Utc::now();
+        pm.updated_at = Utc::now().to_rfc3339();
         self.repository.update(id, pm).await
     }
 
