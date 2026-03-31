@@ -5,6 +5,7 @@ use validator::Validate;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, SurrealValue)]
 #[serde(rename_all = "lowercase")]
+#[surreal(untagged)]
 pub enum ExpenseStatus {
     #[default]
     Pending,
