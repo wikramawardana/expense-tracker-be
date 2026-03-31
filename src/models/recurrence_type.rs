@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
+use surrealdb::types::RecordId;
 use surrealdb::types::SurrealValue;
 use validator::Validate;
 
 #[derive(Debug, Clone, Serialize, Deserialize, SurrealValue)]
 pub struct RecurrenceType {
-    pub id: String,
+    pub id: RecordId,
     pub name: String,
     pub description: Option<String>,
     pub is_active: bool,
@@ -39,7 +40,7 @@ pub struct RecurrenceTypeResponse {
 impl From<RecurrenceType> for RecurrenceTypeResponse {
     fn from(rt: RecurrenceType) -> Self {
         RecurrenceTypeResponse {
-            id: crate::models::extract_id(&rt.id),
+            id: crate::models::record_key_to_string(&rt.id.key),
             name: rt.name,
             description: rt.description,
             is_active: rt.is_active,

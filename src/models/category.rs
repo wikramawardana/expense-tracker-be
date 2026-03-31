@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
+use surrealdb::types::RecordId;
 use surrealdb::types::SurrealValue;
 use validator::Validate;
 
 #[derive(Debug, Clone, Serialize, Deserialize, SurrealValue)]
 pub struct Category {
-    pub id: String,
+    pub id: RecordId,
     pub name: String,
     pub icon: Option<String>,
     pub color: Option<String>,
@@ -47,7 +48,7 @@ pub struct CategoryResponse {
 impl From<Category> for CategoryResponse {
     fn from(cat: Category) -> Self {
         CategoryResponse {
-            id: crate::models::extract_id(&cat.id),
+            id: crate::models::record_key_to_string(&cat.id.key),
             name: cat.name,
             icon: cat.icon,
             color: cat.color,

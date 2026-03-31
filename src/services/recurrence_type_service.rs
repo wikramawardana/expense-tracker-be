@@ -1,4 +1,5 @@
 use chrono::Utc;
+use surrealdb::types::RecordId;
 use uuid::Uuid;
 use validator::Validate;
 
@@ -26,7 +27,7 @@ impl RecurrenceTypeService {
 
         let now = Utc::now().to_rfc3339();
         let rt = RecurrenceType {
-            id: Uuid::new_v4().to_string(),
+            id: RecordId::new("recurrence_types", Uuid::new_v4().to_string()),
             name: request.name,
             description: request.description,
             is_active: true,

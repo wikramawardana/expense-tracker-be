@@ -13,9 +13,10 @@ impl CategoryRepository {
     }
 
     pub async fn create(&self, category: Category) -> AppResult<Category> {
+        let key = crate::models::record_key_to_string(&category.id.key);
         let created: Option<Category> = self
             .db
-            .create(("categories", category.id.clone()))
+            .create::<Option<Category>>(("categories", key))
             .content(category)
             .await?;
         created.ok_or_else(|| AppError::Internal("Failed to create category".to_string()))

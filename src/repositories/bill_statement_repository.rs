@@ -13,9 +13,10 @@ impl BillStatementRepository {
     }
 
     pub async fn create(&self, bs: BillStatement) -> AppResult<BillStatement> {
+        let key = crate::models::record_key_to_string(&bs.id.key);
         let created: Option<BillStatement> = self
             .db
-            .create(("bill_statements", bs.id.clone()))
+            .create::<Option<BillStatement>>(("bill_statements", key))
             .content(bs)
             .await?;
         created.ok_or_else(|| AppError::Internal("Failed to create bill statement".to_string()))

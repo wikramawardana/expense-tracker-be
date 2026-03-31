@@ -13,9 +13,10 @@ impl PaymentMethodRepository {
     }
 
     pub async fn create(&self, pm: PaymentMethod) -> AppResult<PaymentMethod> {
+        let key = crate::models::record_key_to_string(&pm.id.key);
         let created: Option<PaymentMethod> = self
             .db
-            .create(("payment_methods", pm.id.clone()))
+            .create::<Option<PaymentMethod>>(("payment_methods", key))
             .content(pm)
             .await?;
         created.ok_or_else(|| AppError::Internal("Failed to create payment method".to_string()))

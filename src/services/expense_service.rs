@@ -1,4 +1,5 @@
 use chrono::{DateTime, Datelike, Months, Utc};
+use surrealdb::types::RecordId;
 use uuid::Uuid;
 use validator::Validate;
 
@@ -122,7 +123,7 @@ impl ExpenseService {
         let recurrence_type_name = resolved_recurrence_type.clone();
 
         let first_expense = Expense {
-            id: Uuid::new_v4().to_string(),
+            id: RecordId::new("expenses", Uuid::new_v4().to_string()),
             title: request.title.clone(),
             amount: request.amount,
             payment_method: payment_method_name.clone(),
@@ -167,7 +168,7 @@ impl ExpenseService {
                     Some(self.format_bill_statement_name(&future_date));
 
                 let future_expense = Expense {
-                    id: Uuid::new_v4().to_string(),
+                    id: RecordId::new("expenses", Uuid::new_v4().to_string()),
                     title: request.title.clone(),
                     amount: request.amount,
                     payment_method: payment_method_name.clone(),
@@ -261,12 +262,12 @@ impl ExpenseService {
         let name = self.format_bill_statement_name(date_str);
 
         if let Some(existing) = self.bill_statement_repository.find_by_name(&name).await? {
-            return Ok(existing.id);
+            return Ok(crate::models::record_key_to_string(&existing.id.key));
         }
 
         let now = Utc::now().to_rfc3339();
         let new_bill_statement = BillStatement {
-            id: Uuid::new_v4().to_string(),
+            id: RecordId::new("bill_statements", Uuid::new_v4().to_string()),
             name: name.clone(),
             payment_method_id: None,
             statement_date: Some(date_str.to_string()),
@@ -281,7 +282,7 @@ impl ExpenseService {
             .bill_statement_repository
             .create(new_bill_statement)
             .await?;
-        Ok(created.id)
+        Ok(crate::models::record_key_to_string(&created.id.key))
     }
 
     fn calculate_range(
@@ -568,7 +569,7 @@ impl ExpenseService {
                 Some(self.format_bill_statement_name(&current_date_str));
 
             let new_expense = Expense {
-                id: Uuid::new_v4().to_string(),
+                id: RecordId::new("expenses", Uuid::new_v4().to_string()),
                 title: expense.title.clone(),
                 amount: expense.amount,
                 payment_method: expense.payment_method.clone(),

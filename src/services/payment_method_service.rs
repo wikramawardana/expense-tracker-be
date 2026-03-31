@@ -1,4 +1,5 @@
 use chrono::Utc;
+use surrealdb::types::RecordId;
 use uuid::Uuid;
 use validator::Validate;
 
@@ -25,7 +26,7 @@ impl PaymentMethodService {
 
         let now = Utc::now().to_rfc3339();
         let pm = PaymentMethod {
-            id: Uuid::new_v4().to_string(),
+            id: RecordId::new("payment_methods", Uuid::new_v4().to_string()),
             name: request.name,
             method_type: request.method_type,
             description: request.description,

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use surrealdb::types::RecordId;
 use surrealdb::types::SurrealValue;
 use validator::Validate;
 
@@ -39,7 +40,7 @@ impl std::str::FromStr for ExpenseStatus {
 
 #[derive(Debug, Clone, Serialize, Deserialize, SurrealValue)]
 pub struct Expense {
-    pub id: String,
+    pub id: RecordId,
     pub title: String,
     pub amount: f64,
     pub payment_method: String,
@@ -135,7 +136,7 @@ pub struct ExpenseResponse {
 impl From<Expense> for ExpenseResponse {
     fn from(expense: Expense) -> Self {
         ExpenseResponse {
-            id: crate::models::extract_id(&expense.id),
+            id: crate::models::record_key_to_string(&expense.id.key),
             title: expense.title,
             amount: expense.amount,
             payment_method: expense.payment_method,

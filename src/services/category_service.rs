@@ -1,4 +1,5 @@
 use chrono::Utc;
+use surrealdb::types::RecordId;
 use uuid::Uuid;
 use validator::Validate;
 
@@ -23,7 +24,7 @@ impl CategoryService {
 
         let now = Utc::now().to_rfc3339();
         let category = Category {
-            id: Uuid::new_v4().to_string(),
+            id: RecordId::new("categories", Uuid::new_v4().to_string()),
             name: request.name,
             icon: request.icon,
             color: request.color,

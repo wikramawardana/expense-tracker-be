@@ -13,9 +13,10 @@ impl RecurrenceTypeRepository {
     }
 
     pub async fn create(&self, rt: RecurrenceType) -> AppResult<RecurrenceType> {
+        let key = crate::models::record_key_to_string(&rt.id.key);
         let created: Option<RecurrenceType> = self
             .db
-            .create(("recurrence_types", rt.id.clone()))
+            .create::<Option<RecurrenceType>>(("recurrence_types", key))
             .content(rt)
             .await?;
         created.ok_or_else(|| AppError::Internal("Failed to create recurrence type".to_string()))

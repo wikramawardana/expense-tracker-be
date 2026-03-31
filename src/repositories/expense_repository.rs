@@ -14,9 +14,10 @@ impl ExpenseRepository {
     }
 
     pub async fn create(&self, expense: Expense) -> AppResult<Expense> {
+        let key = crate::models::record_key_to_string(&expense.id.key);
         let created: Option<Expense> = self
             .db
-            .create(("expenses", expense.id.clone()))
+            .create::<Option<Expense>>(("expenses", key))
             .content(expense)
             .await?;
         created.ok_or_else(|| AppError::Internal("Failed to create expense".to_string()))

@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
+use surrealdb::types::RecordId;
 use surrealdb::types::SurrealValue;
 use validator::Validate;
 
 #[derive(Debug, Clone, Serialize, Deserialize, SurrealValue)]
 pub struct PaymentMethod {
-    pub id: String,
+    pub id: RecordId,
     pub name: String,
     pub method_type: String,
     pub description: Option<String>,
@@ -44,7 +45,7 @@ pub struct PaymentMethodResponse {
 impl From<PaymentMethod> for PaymentMethodResponse {
     fn from(pm: PaymentMethod) -> Self {
         PaymentMethodResponse {
-            id: crate::models::extract_id(&pm.id),
+            id: crate::models::record_key_to_string(&pm.id.key),
             name: pm.name,
             method_type: pm.method_type,
             description: pm.description,

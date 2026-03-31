@@ -1,10 +1,11 @@
-/// Extract the ID from a SurrealDB record ID string like "table:`uuid`" or "table:key".
-pub fn extract_id(id: &str) -> String {
-    id.split(':')
-        .last()
-        .unwrap_or(id)
-        .trim_matches('`')
-        .to_string()
+use surrealdb::types::RecordIdKey;
+
+pub fn record_key_to_string(key: &RecordIdKey) -> String {
+    match key {
+        RecordIdKey::String(s) => s.clone(),
+        RecordIdKey::Number(n) => n.to_string(),
+        _ => format!("{:?}", key),
+    }
 }
 
 pub mod response;
