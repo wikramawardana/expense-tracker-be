@@ -19,6 +19,13 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 async fn main() {
     dotenv::dotenv().ok();
 
+    // Install rustls default CryptoProvider (ring) for the whole process.
+    // Required because multiple providers (ring + aws-lc-rs) are pulled in
+    // by transitive deps, so rustls 0.23 can't auto-select one.
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install rustls ring CryptoProvider");
+
     // Initialize tracing
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(

@@ -27,6 +27,20 @@ pub async fn init_db(cfg: &Config) -> Arc<DB> {
         .await
         .expect("Failed to select namespace/database");
 
+    // Ensure all tables exist as SCHEMALESS. SurrealDB v3 errors on SELECT
+    // from a non-existent table instead of returning an empty set like v2 did,
+    // so we explicitly define them on startup.
+    let schema = r#"
+        DEFINE TABLE IF NOT EXISTS expenses SCHEMALESS;
+        DEFINE TABLE IF NOT EXISTS bill_statements SCHEMALESS;
+        DEFINE TABLE IF NOT EXISTS categories SCHEMALESS;
+        DEFINE TABLE IF NOT EXISTS payment_methods SCHEMALESS;
+        DEFINE TABLE IF NOT EXISTS recurrence_types SCHEMALESS;
+    "#;
+    db.query(schema)
+        .await
+        .expect("Failed to initialize SurrealDB schema");
+
     let arc = Arc::new(db);
     DB_INSTANCE.set(arc.clone()).ok();
     arc
