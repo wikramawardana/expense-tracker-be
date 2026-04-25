@@ -5,8 +5,9 @@ use validator::Validate;
 
 use crate::errors::{AppError, AppResult};
 use crate::models::{
-    BillStatement, CreateExpenseRequest, Expense, ExpensePaginationMeta, ExpenseQueryParams,
-    ExpenseResponse, ExpenseStatus, PaginatedExpensesResponse, UpdateExpenseRequest,
+    BillStatement, CreateExpenseRequest, CreateExpensesBulkRequest, Expense, ExpensePaginationMeta,
+    ExpenseQueryParams, ExpenseResponse, ExpenseStatus, PaginatedExpensesResponse,
+    UpdateExpenseRequest,
 };
 use crate::repositories::{
     BillStatementRepository, ExpenseRepository, PaymentMethodRepository, RecurrenceTypeRepository,
@@ -196,6 +197,30 @@ impl ExpenseService {
         }
 
         Ok(created_first)
+    }
+
+    pub async fn create_bulk(
+        &self,
+        request: CreateExpensesBulkRequest,
+    ) -> AppResult<Vec<Expense>> {
+        if request.expenses.is_empty() {
+            return Err(AppError::Validation(
+                "At least one expense is required".to_string(),
+            ));
+        }
+
+        let mut created: Vec<Expense> = Vec::with_capacity(request.expenses.len());
+        for (idx, item) in request.expenses.into_iter().enumerate() {
+            let expense = self.create(item).await.map_err(|e| match e {
+                AppError::Validation(msg) => {
+                    AppError::Validation(format!("Expense #{}: {}", idx + 1, msg))
+                }
+                other => other,
+            })?;
+            created.push(expense);
+        }
+
+        Ok(created)
     }
 
     fn format_bill_statement_name(&self, date_str: &str) -> String {

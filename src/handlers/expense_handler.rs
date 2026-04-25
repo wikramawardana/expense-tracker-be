@@ -8,8 +8,8 @@ use axum::{
 use crate::db::Database;
 use crate::errors::AppResult;
 use crate::models::{
-    ApiResponse, CreateExpenseRequest, ExpenseQueryParams, ExpenseResponse,
-    PaginatedExpensesResponse, UpdateExpenseRequest,
+    ApiResponse, BulkCreateExpensesResponse, CreateExpenseRequest, CreateExpensesBulkRequest,
+    ExpenseQueryParams, ExpenseResponse, PaginatedExpensesResponse, UpdateExpenseRequest,
 };
 use crate::repositories::{
     BillStatementRepository, ExpenseRepository, PaymentMethodRepository, RecurrenceTypeRepository,
@@ -46,6 +46,25 @@ impl ExpenseHandler {
         Ok((
             StatusCode::CREATED,
             ApiResponse::success(response, "Expense created successfully"),
+        ))
+    }
+
+    /// Create multiple expenses in a single request
+    pub async fn create_bulk(
+        State(handler): State<Self>,
+        Json(request): Json<CreateExpensesBulkRequest>,
+    ) -> AppResult<impl IntoResponse> {
+        let expenses = handler.service.create_bulk(request).await?;
+        let created: Vec<ExpenseResponse> =
+            expenses.into_iter().map(ExpenseResponse::from).collect();
+        let count = created.len();
+        let response = BulkCreateExpensesResponse { created, count };
+        Ok((
+            StatusCode::CREATED,
+            ApiResponse::success(
+                response,
+                &format!("{} expense(s) created successfully", count),
+            ),
         ))
     }
 
