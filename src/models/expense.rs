@@ -85,6 +85,17 @@ pub struct CreateExpenseRequest {
     pub recurrence_end_date: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct CreateExpensesBulkRequest {
+    pub expenses: Vec<CreateExpenseRequest>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BulkCreateExpensesResponse {
+    pub created: Vec<ExpenseResponse>,
+    pub count: usize,
+}
+
 #[derive(Debug, Deserialize, Validate)]
 pub struct UpdateExpenseRequest {
     pub title: Option<String>,

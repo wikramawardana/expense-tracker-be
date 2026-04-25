@@ -48,6 +48,7 @@ pub fn create_router(
     let protected_expense_routes = Router::new()
         .route("/expenses", post(ExpenseHandler::create))
         .route("/expenses", get(ExpenseHandler::get_all))
+        .route("/expenses/bulk", post(ExpenseHandler::create_bulk))
         .route("/expenses/:id", get(ExpenseHandler::get_by_id))
         .route("/expenses/:id", put(ExpenseHandler::update))
         .route("/expenses/:id", delete(ExpenseHandler::delete))

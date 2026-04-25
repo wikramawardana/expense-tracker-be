@@ -13,8 +13,9 @@ pub use response::ApiResponse;
 
 pub mod expense;
 pub use expense::{
-    CreateExpenseRequest, Expense, ExpensePaginationMeta, ExpenseQueryParams, ExpenseResponse,
-    ExpenseStatus, PaginatedExpensesResponse, UpdateExpenseRequest,
+    BulkCreateExpensesResponse, CreateExpenseRequest, CreateExpensesBulkRequest, Expense,
+    ExpensePaginationMeta, ExpenseQueryParams, ExpenseResponse, ExpenseStatus,
+    PaginatedExpensesResponse, UpdateExpenseRequest,
 };
 
 pub mod payment_method;
