@@ -12,3 +12,6 @@ pub use bill_statement_service::BillStatementService;
 
 pub mod recurrence_type_service;
 pub use recurrence_type_service::RecurrenceTypeService;
+
+pub mod api_key_service;
+pub use api_key_service::{hash_key, ApiKeyService};
