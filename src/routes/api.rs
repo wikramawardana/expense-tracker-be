@@ -7,18 +7,21 @@ use axum::{
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 use crate::handlers::{
-    BillStatementHandler, CategoryHandler, ExpenseHandler, PaymentMethodHandler,
+    ApiKeyHandler, BillStatementHandler, CategoryHandler, ExpenseHandler, PaymentMethodHandler,
     RecurrenceTypeHandler,
 };
-use crate::middleware::{auth_middleware, AuthState};
+use crate::middleware::{auth_middleware, bot_auth_middleware, AuthState, BotAuthState};
 
+#[allow(clippy::too_many_arguments)]
 pub fn create_router(
     expense_handler: ExpenseHandler,
     payment_method_handler: PaymentMethodHandler,
     category_handler: CategoryHandler,
     bill_statement_handler: BillStatementHandler,
     recurrence_type_handler: RecurrenceTypeHandler,
+    api_key_handler: ApiKeyHandler,
     auth_state: AuthState,
+    bot_auth_state: BotAuthState,
 ) -> Router {
     // Configure CORS
     let frontend_url =
@@ -52,7 +55,7 @@ pub fn create_router(
         .route("/expenses/:id", get(ExpenseHandler::get_by_id))
         .route("/expenses/:id", put(ExpenseHandler::update))
         .route("/expenses/:id", delete(ExpenseHandler::delete))
-        .with_state(expense_handler)
+        .with_state(expense_handler.clone())
         .layer(middleware::from_fn_with_state(
             auth_state.clone(),
             auth_middleware,
@@ -65,7 +68,7 @@ pub fn create_router(
         .route("/payment-methods/:id", get(PaymentMethodHandler::get_by_id))
         .route("/payment-methods/:id", put(PaymentMethodHandler::update))
         .route("/payment-methods/:id", delete(PaymentMethodHandler::delete))
-        .with_state(payment_method_handler)
+        .with_state(payment_method_handler.clone())
         .layer(middleware::from_fn_with_state(
             auth_state.clone(),
             auth_middleware,
@@ -78,7 +81,7 @@ pub fn create_router(
         .route("/categories/:id", get(CategoryHandler::get_by_id))
         .route("/categories/:id", put(CategoryHandler::update))
         .route("/categories/:id", delete(CategoryHandler::delete))
-        .with_state(category_handler)
+        .with_state(category_handler.clone())
         .layer(middleware::from_fn_with_state(
             auth_state.clone(),
             auth_middleware,
@@ -91,7 +94,7 @@ pub fn create_router(
         .route("/bill-statements/:id", get(BillStatementHandler::get_by_id))
         .route("/bill-statements/:id", put(BillStatementHandler::update))
         .route("/bill-statements/:id", delete(BillStatementHandler::delete))
-        .with_state(bill_statement_handler)
+        .with_state(bill_statement_handler.clone())
         .layer(middleware::from_fn_with_state(
             auth_state.clone(),
             auth_middleware,
@@ -116,6 +119,54 @@ pub fn create_router(
             auth_middleware,
         ));
 
+    // ========== Protected API Key Management Routes (session-authed) ==========
+    let protected_api_key_routes = Router::new()
+        .route("/api-keys", post(ApiKeyHandler::create))
+        .route("/api-keys", get(ApiKeyHandler::list))
+        .route("/api-keys/:id", delete(ApiKeyHandler::revoke))
+        .with_state(api_key_handler)
+        .layer(middleware::from_fn_with_state(
+            auth_state.clone(),
+            auth_middleware,
+        ));
+
+    // ========== Bot Routes (API-key authed, for openclaw / Discord / etc.) ==========
+    // Intentionally a narrow surface: create expenses + read the metadata the
+    // bot needs to pick category/payment-method/bill-statement IDs.
+    let bot_expense_routes = Router::new()
+        .route("/bot/expenses", post(ExpenseHandler::create))
+        .route("/bot/expenses", get(ExpenseHandler::get_all))
+        .route("/bot/expenses/bulk", post(ExpenseHandler::create_bulk))
+        .with_state(expense_handler)
+        .layer(middleware::from_fn_with_state(
+            bot_auth_state.clone(),
+            bot_auth_middleware,
+        ));
+
+    let bot_category_routes = Router::new()
+        .route("/bot/categories", get(CategoryHandler::get_all))
+        .with_state(category_handler)
+        .layer(middleware::from_fn_with_state(
+            bot_auth_state.clone(),
+            bot_auth_middleware,
+        ));
+
+    let bot_payment_method_routes = Router::new()
+        .route("/bot/payment-methods", get(PaymentMethodHandler::get_all))
+        .with_state(payment_method_handler)
+        .layer(middleware::from_fn_with_state(
+            bot_auth_state.clone(),
+            bot_auth_middleware,
+        ));
+
+    let bot_bill_statement_routes = Router::new()
+        .route("/bot/bill-statements", get(BillStatementHandler::get_all))
+        .with_state(bill_statement_handler)
+        .layer(middleware::from_fn_with_state(
+            bot_auth_state,
+            bot_auth_middleware,
+        ));
+
     Router::new()
         .nest("/api/v1", public_routes)
         .nest("/api/v1", protected_expense_routes)
@@ -123,6 +174,11 @@ pub fn create_router(
         .nest("/api/v1", protected_category_routes)
         .nest("/api/v1", protected_bill_statement_routes)
         .nest("/api/v1", protected_recurrence_type_routes)
+        .nest("/api/v1", protected_api_key_routes)
+        .nest("/api/v1", bot_expense_routes)
+        .nest("/api/v1", bot_category_routes)
+        .nest("/api/v1", bot_payment_method_routes)
+        .nest("/api/v1", bot_bill_statement_routes)
         .layer(cors)
         .layer(TraceLayer::new_for_http())
 }

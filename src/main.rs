@@ -10,7 +10,8 @@ mod services;
 
 use config::load;
 use db::init_db;
-use middleware::AuthState;
+use middleware::{AuthState, BotAuthState};
+use services::ApiKeyService;
 use sqlx::postgres::PgPoolOptions;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -53,8 +54,14 @@ async fn main() {
         .expect("Failed to connect to PostgreSQL");
     println!("PostgreSQL connected for auth verification");
 
-    // Create auth state
-    let auth_state = AuthState::new(pg_pool);
+    // Ensure the api_key table exists alongside the better-auth session/user tables.
+    ApiKeyService::init_schema(&pg_pool)
+        .await
+        .expect("Failed to initialize api_key schema");
+
+    // Create auth states
+    let auth_state = AuthState::new(pg_pool.clone());
+    let bot_auth_state = BotAuthState::new(pg_pool.clone());
 
     // Initialize handlers
     let expense_handler = handlers::ExpenseHandler::new(db_instance.clone());
@@ -62,6 +69,7 @@ async fn main() {
     let category_handler = handlers::CategoryHandler::new(db_instance.clone());
     let bill_statement_handler = handlers::BillStatementHandler::new(db_instance.clone());
     let recurrence_type_handler = handlers::RecurrenceTypeHandler::new(db_instance.clone());
+    let api_key_handler = handlers::ApiKeyHandler::new(ApiKeyService::new(pg_pool));
 
     // Build the router
     let app = routes::create_router(
@@ -70,7 +78,9 @@ async fn main() {
         category_handler,
         bill_statement_handler,
         recurrence_type_handler,
+        api_key_handler,
         auth_state,
+        bot_auth_state,
     )
     .layer(TraceLayer::new_for_http());
 
