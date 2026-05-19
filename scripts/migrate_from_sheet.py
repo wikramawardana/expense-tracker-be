@@ -62,46 +62,49 @@ RECURRING_START_DATE = "2026-05-01T00:00:00Z"
 RECURRING_END_DATE_DEFAULT = "2030-12-01T00:00:00Z"  # for subscription/recurring
 
 # title-keyword -> category name.  First match wins (order matters).
+# Re-uses the user's existing 3-category system (Transportation, Shopping,
+# Responsibility) and adds 4 more focused ones.  "Responsibility" absorbs
+# bills, family obligations, education, and dev/utility subscriptions —
+# matching the user's existing mental model.
 CATEGORY_RULES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\b(grab|gojek|bluebird|grabfood|shopeefood|pertamax|parkir|pesawat|tiket\.com|grab thai|grab bangkok|grabfood thai)\b", re.I), "Transportation"),
-    (re.compile(r"\b(netflix|youtube|icloud|github copilot|hostinger|biznet|kuota|xl|roblox|diamond)\b", re.I), "Entertainment"),
+    (re.compile(r"\b(netflix|youtube|icloud|roblox|diamond)\b", re.I), "Entertainment"),
     (re.compile(r"\b(hermina|apotek|pt gym|anytime fitness)\b", re.I), "Health & Medical"),
-    (re.compile(r"\b(spp ruby|sekolah ruby|spp|sekolah)\b", re.I), "Education"),
+    (re.compile(r"\b(rumah|embah|kasbon|pajak|spp ruby|sekolah ruby|spp|sekolah|biznet|hostinger|github copilot|kuota|xl)\b", re.I), "Responsibility"),
     (re.compile(r"\b(shopee|tokopedia|uniqlo|birkenstock|chopper|case iphone|sofa|ipad|iphone|macbook|hp teteh|sepatu|alva|motor|mobil|paperid|alfamart)\b", re.I), "Shopping"),
-    (re.compile(r"\b(rumah|embah|kasbon|pajak)\b", re.I), "Bills & Utilities"),
     (re.compile(r"\b(pasar|sabana|mixue|pecel|nasi uduk|sembako|bumbu|cabe|ayam|ikan|sayur|tahu|buah|jahitan|kokarmina|kios udin|lapak|pizza hut|dunkin|7 11|grand seafood|noodle klia|solaria|central phuket|litle malaysia|fuji asa foto|cafe|kintan|es podeng)\b", re.I), "Food & Dining"),
 ]
 DEFAULT_CATEGORY = "Other"
 
+# Seed list — only NEW categories are added; the 3 existing ones (Transportation,
+# Shopping, Responsibility) are matched by name, so we don't duplicate them.
 CATEGORY_SEED: list[dict[str, Any]] = [
-    {"name": "Food & Dining",     "icon": "🍔", "color": "#f97316"},
-    {"name": "Transportation",    "icon": "🚗", "color": "#3b82f6"},
-    {"name": "Entertainment",     "icon": "🎬", "color": "#a855f7"},
-    {"name": "Shopping",          "icon": "🛍️", "color": "#ec4899"},
-    {"name": "Bills & Utilities", "icon": "📄", "color": "#14b8a6"},
-    {"name": "Health & Medical",  "icon": "🏥", "color": "#ef4444"},
-    {"name": "Education",         "icon": "📚", "color": "#eab308"},
-    {"name": "Other",             "icon": "📦", "color": "#6b7280"},
+    {"name": "Food & Dining",     "icon": "🍔", "color": "#F97316"},
+    {"name": "Entertainment",     "icon": "🎬", "color": "#A855F7"},
+    {"name": "Health & Medical",  "icon": "🏥", "color": "#EF4444"},
+    {"name": "Other",             "icon": "📦", "color": "#6B7280"},
 ]
 
-# sheet payment string -> (api name, method_type)
+# sheet payment string -> (api name, method_type).
+# Names match the EXISTING payment methods in the system; only `Digibank Credit Card`
+# and `Mandiri Bonvoy` are new and will be auto-created.
 PAYMENT_METHOD_MAP: dict[str, tuple[str, str]] = {
-    "SALARY":            ("Salary (Cash)",        "cash"),
-    "CC BCA":            ("BCA Credit Card",      "credit_card"),
-    "CC BNI":            ("BNI Credit Card",      "credit_card"),
-    "CC DIGIBANK":       ("Digibank Credit Card", "credit_card"),
-    "CC JENIUS":         ("Jenius Credit Card",   "credit_card"),
-    "CC MANDIRI":        ("Mandiri Credit Card",  "credit_card"),
-    "CC MANDIRI BONVOY": ("Mandiri Bonvoy",       "credit_card"),
-    "CC TOKPED CARD":    ("BCA Tokopedia Card",   "credit_card"),
-    "CC UOB":            ("UOB Credit Card",      "credit_card"),
+    "SALARY":            ("Salary",                "cash"),
+    "CC BCA":            ("BCA Credit Card",       "credit_card"),
+    "CC BNI":            ("BNI Credit Card",       "credit_card"),
+    "CC DIGIBANK":       ("Digibank Credit Card",  "credit_card"),
+    "CC JENIUS":         ("Jenius Credit Card",    "credit_card"),
+    "CC MANDIRI":        ("Mandiri Credit Card",   "credit_card"),
+    "CC MANDIRI BONVOY": ("Mandiri Bonvoy",        "credit_card"),
+    "CC TOKPED CARD":    ("Tokopedia Credit Card", "credit_card"),
+    "CC UOB":            ("UOB Credit Card",       "credit_card"),
 }
 
+# Recurrence type names match what already exists in the system (Capitalized).
 RECURRENCE_TYPES_SEED: list[dict[str, Any]] = [
-    {"name": "none",         "description": "One-time expense"},
-    {"name": "installment",  "description": "Fixed-count monthly installment"},
-    {"name": "subscription", "description": "Open-ended monthly subscription"},
-    {"name": "recurring",    "description": "Open-ended monthly recurring bill"},
+    {"name": "Installment",  "description": "Fixed-count monthly installment"},
+    {"name": "Subscription", "description": "Open-ended monthly subscription"},
+    {"name": "Recurring",    "description": "Open-ended monthly recurring bill"},
 ]
 
 INSTALLMENT_RE = re.compile(r"installment:\s*(\d+)\s*/\s*(\d+)", re.I)
@@ -425,16 +428,16 @@ def build_payload(
         payload["paid_by"] = row.paid_by
 
     if row.bucket == "installment":
-        payload["recurrence_type_id"] = recurrence_id["installment"]
+        payload["recurrence_type_id"] = recurrence_id["Installment"]
         payload["recurrence_type"] = "installment"
         payload["recurrence_count"] = row.recurrence_count
         payload["recurrence_current"] = row.recurrence_current
     elif row.bucket == "subscription":
-        payload["recurrence_type_id"] = recurrence_id["subscription"]
+        payload["recurrence_type_id"] = recurrence_id["Subscription"]
         payload["recurrence_type"] = "subscription"
         payload["recurrence_end_date"] = RECURRING_END_DATE_DEFAULT
     elif row.bucket == "recurring":
-        payload["recurrence_type_id"] = recurrence_id["recurring"]
+        payload["recurrence_type_id"] = recurrence_id["Recurring"]
         payload["recurrence_type"] = "recurring"
         payload["recurrence_end_date"] = RECURRING_END_DATE_DEFAULT
     # one_time: no recurrence fields
