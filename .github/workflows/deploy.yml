@@ -55,8 +55,25 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     environment: production
+    permissions:
+      contents: read
+      packages: read
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Copy MCP server to VPS
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          source: "mcp/server.py,mcp/README.md"
+          target: "/home/wikra/production-projects/expense-tracker"
+          overwrite: true
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         with:
@@ -70,6 +87,13 @@ jobs:
             docker compose pull expense-tracker-api
             docker compose up -d expense-tracker-api
             docker image prune -f
+            if [ -f /home/wikra/production-projects/expense-tracker/mcp/server.py ]; then
+              chmod 700 /home/wikra/production-projects/expense-tracker/mcp/server.py
+              /home/wikra/.hermes/hermes-agent/venv/bin/python -m py_compile /home/wikra/production-projects/expense-tracker/mcp/server.py
+              if systemctl --user is-active --quiet hermes-gateway-wiclaw-expense-tracker.service; then
+                systemctl --user restart hermes-gateway-wiclaw-expense-tracker.service || true
+              fi
+            fi
 
   health-check:
     name: Health Check
