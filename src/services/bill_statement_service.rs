@@ -5,7 +5,8 @@ use validator::Validate;
 
 use crate::errors::{AppError, AppResult};
 use crate::models::{
-    BillStatement, BillStatementResponse, CreateBillStatementRequest, UpdateBillStatementRequest,
+    BillStatement, BillStatementResponse, CreateBillStatementRequest, NullableUpdate,
+    UpdateBillStatementRequest,
 };
 use crate::repositories::BillStatementRepository;
 
@@ -59,17 +60,41 @@ impl BillStatementService {
         if let Some(name) = request.name {
             bs.name = name;
         }
-        if let Some(payment_method_id) = request.payment_method_id {
-            bs.payment_method_id = payment_method_id;
+        match request.payment_method_id {
+            NullableUpdate::Value(payment_method_id) => {
+                bs.payment_method_id = Some(payment_method_id);
+            }
+            NullableUpdate::Null => {
+                bs.payment_method_id = None;
+            }
+            NullableUpdate::Unset => {}
         }
-        if let Some(statement_date) = request.statement_date {
-            bs.statement_date = statement_date;
+        match request.statement_date {
+            NullableUpdate::Value(statement_date) => {
+                bs.statement_date = Some(statement_date);
+            }
+            NullableUpdate::Null => {
+                bs.statement_date = None;
+            }
+            NullableUpdate::Unset => {}
         }
-        if let Some(due_date) = request.due_date {
-            bs.due_date = due_date;
+        match request.due_date {
+            NullableUpdate::Value(due_date) => {
+                bs.due_date = Some(due_date);
+            }
+            NullableUpdate::Null => {
+                bs.due_date = None;
+            }
+            NullableUpdate::Unset => {}
         }
-        if let Some(description) = request.description {
-            bs.description = description;
+        match request.description {
+            NullableUpdate::Value(description) => {
+                bs.description = Some(description);
+            }
+            NullableUpdate::Null => {
+                bs.description = None;
+            }
+            NullableUpdate::Unset => {}
         }
         if let Some(is_active) = request.is_active {
             bs.is_active = is_active;

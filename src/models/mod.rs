@@ -28,7 +28,8 @@ pub use category::{Category, CategoryResponse, CreateCategoryRequest, UpdateCate
 
 pub mod bill_statement;
 pub use bill_statement::{
-    BillStatement, BillStatementResponse, CreateBillStatementRequest, UpdateBillStatementRequest,
+    BillStatement, BillStatementResponse, CreateBillStatementRequest, NullableUpdate,
+    UpdateBillStatementRequest,
 };
 
 pub mod recurrence_type;
