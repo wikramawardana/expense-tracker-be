@@ -28,9 +28,15 @@ It connects directly to the production SurrealDB HTTP endpoint from the VPS and 
 Available tools:
 
 - `list_expense_context`
+- `list_expenses`
+- `get_expenses_today`
+- `delete_expense`
+- `delete_all_expenses`
 - `create_category`
 - `create_payment_method`
 - `create_bill_statement`
 - `create_expense`
+
+`delete_all_expenses` deletes only transaction rows from `expenses`; categories, payment methods, and bill statements are kept. It requires the exact confirmation value `DELETE ALL EXPENSES`.
 
 Hermes exposes these as `mcp_expense_tracker_<tool_name>` after the server is configured in the profile.

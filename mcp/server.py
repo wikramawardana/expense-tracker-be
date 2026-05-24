@@ -33,6 +33,8 @@ STATUS_STORAGE_VALUES = {
     "unpaid": "Unpaid",
     "paid": "Paid",
 }
+STORAGE_STATUS_VALUES = {value.casefold(): key for key, value in STATUS_STORAGE_VALUES.items()}
+DELETE_ALL_CONFIRMATION = "DELETE ALL EXPENSES"
 
 mcp = FastMCP("expense-tracker")
 
@@ -86,6 +88,16 @@ def sql_record_id(table: str, record_id: str) -> str:
     if not clean_id or not re.fullmatch(r"[A-Za-z0-9_.:-]+", clean_id):
         raise ToolError(f"Invalid {table} id: {record_id}")
     return f"{table}:`{clean_id}`"
+
+
+def sql_literal(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    if value is None:
+        return "NONE"
+    return json.dumps(str(value), ensure_ascii=False)
 
 
 def db_config() -> dict[str, str]:
@@ -165,6 +177,8 @@ def plain_id(raw_id: Any) -> str:
 def public_record(record: dict[str, Any]) -> dict[str, Any]:
     item = dict(record)
     item["id"] = plain_id(item.get("id"))
+    if "status" in item and isinstance(item["status"], str):
+        item["status"] = STORAGE_STATUS_VALUES.get(item["status"].casefold(), item["status"])
     return item
 
 
@@ -183,9 +197,27 @@ def strip_none_values(value: Any) -> Any:
 def simplify_records(records: Any) -> list[dict[str, Any]]:
     if not records:
         return []
+    if isinstance(records, dict):
+        return [public_record(records)]
     if not isinstance(records, list):
         raise ToolError(f"Expected list result, got: {records}")
     return [public_record(record) for record in records if isinstance(record, dict)]
+
+
+def clamp_limit(limit: int, *, default: int = 20, maximum: int = 100) -> int:
+    try:
+        value = int(limit)
+    except (TypeError, ValueError):
+        value = default
+    return max(1, min(value, maximum))
+
+
+def clamp_offset(offset: int) -> int:
+    try:
+        value = int(offset)
+    except (TypeError, ValueError):
+        value = 0
+    return max(0, value)
 
 
 def active_records(table: str) -> list[dict[str, Any]]:
@@ -278,6 +310,19 @@ def parse_expense_date(value: str | None) -> tuple[str, date]:
     return utc_dt.isoformat(timespec="milliseconds").replace("+00:00", "Z"), local_date
 
 
+def parse_expense_date_end(value: str | None) -> tuple[str, date]:
+    value = clean_optional(value)
+    expense_iso, expense_day = parse_expense_date(value)
+    is_whole_day = (
+        not value
+        or value.casefold() in {"today", "yesterday", "tomorrow"}
+        or re.fullmatch(r"\d{4}-\d{2}-\d{2}", value)
+    )
+    if is_whole_day:
+        return f"{expense_day.isoformat()}T23:59:59.999Z", expense_day
+    return expense_iso, expense_day
+
+
 def month_statement_name(expense_day: date) -> str:
     return f"{calendar.month_name[expense_day.month]} {expense_day.year}"
 
@@ -347,11 +392,223 @@ def context_payload() -> dict[str, list[dict[str, Any]]]:
     }
 
 
+def normalize_status_filter(status: str | None) -> str | None:
+    status = clean_optional(status)
+    if not status:
+        return None
+    status_key = status.casefold()
+    if status_key not in ALLOWED_STATUSES:
+        raise ToolError("Status must be pending, unpaid, or paid")
+    return STATUS_STORAGE_VALUES[status_key]
+
+
+def expense_filter_conditions(
+    *,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    status: str | None = None,
+    bill_statement: str | None = None,
+    bill_statement_id: str | None = None,
+    category: str | None = None,
+    category_id: str | None = None,
+    payment_method: str | None = None,
+    payment_method_id: str | None = None,
+    paid_by: str | None = None,
+) -> list[str]:
+    conditions: list[str] = []
+
+    if clean_optional(date_from):
+        date_from_iso, _ = parse_expense_date(date_from)
+        conditions.append(f"expense_date >= {sql_literal(date_from_iso)}")
+    if clean_optional(date_to):
+        date_to_iso, _ = parse_expense_date_end(date_to)
+        conditions.append(f"expense_date <= {sql_literal(date_to_iso)}")
+
+    status_storage = normalize_status_filter(status)
+    if status_storage:
+        status_lower = STORAGE_STATUS_VALUES.get(status_storage.casefold(), status_storage.casefold())
+        conditions.append(
+            f"(status = {sql_literal(status_storage)} OR status = {sql_literal(status_lower)})"
+        )
+
+    if clean_optional(bill_statement_id):
+        bill_record = resolve_record(
+            "bill_statements",
+            record_id=bill_statement_id,
+            required_label="Bill statement",
+        )
+        conditions.append(f"bill_statement_id = {sql_literal(bill_record['id'])}")
+    elif clean_optional(bill_statement):
+        bill_record = resolve_record(
+            "bill_statements",
+            name=bill_statement,
+            required_label="Bill statement",
+        )
+        conditions.append(f"bill_statement_id = {sql_literal(bill_record['id'])}")
+
+    if clean_optional(category_id):
+        category_record = resolve_record(
+            "categories",
+            record_id=category_id,
+            required_label="Category",
+        )
+        conditions.append(f"category_id = {sql_literal(category_record['id'])}")
+    elif clean_optional(category):
+        category_record = resolve_record(
+            "categories",
+            name=category,
+            required_label="Category",
+        )
+        conditions.append(f"category_id = {sql_literal(category_record['id'])}")
+
+    if clean_optional(payment_method_id):
+        payment_record = resolve_record(
+            "payment_methods",
+            record_id=payment_method_id,
+            required_label="Payment method",
+        )
+        conditions.append(f"payment_method_id = {sql_literal(payment_record['id'])}")
+    elif clean_optional(payment_method):
+        payment_record = resolve_record(
+            "payment_methods",
+            name=payment_method,
+            required_label="Payment method",
+        )
+        conditions.append(f"payment_method = {sql_literal(payment_record['name'])}")
+
+    if clean_optional(paid_by):
+        conditions.append(f"paid_by = {sql_literal(clean_optional(paid_by))}")
+
+    return conditions
+
+
+def count_result(result: Any) -> int:
+    if isinstance(result, list) and result:
+        result = result[0]
+    if isinstance(result, dict):
+        try:
+            return int(result.get("count") or 0)
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
 @mcp.tool()
 def list_expense_context() -> dict[str, Any]:
     """List active categories, payment methods, bill statements, and recurrence types before creating expenses."""
     try:
         return ok(context_payload())
+    except Exception as exc:
+        return fail(exc)
+
+
+@mcp.tool()
+def list_expenses(
+    limit: int = 20,
+    offset: int = 0,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    status: str | None = None,
+    bill_statement: str | None = None,
+    bill_statement_id: str | None = None,
+    category: str | None = None,
+    category_id: str | None = None,
+    payment_method: str | None = None,
+    payment_method_id: str | None = None,
+    paid_by: str | None = None,
+) -> dict[str, Any]:
+    """List expenses with optional filters. Dates accept YYYY-MM-DD, ISO datetime, today, yesterday, or tomorrow."""
+    try:
+        limit = clamp_limit(limit)
+        offset = clamp_offset(offset)
+        conditions = expense_filter_conditions(
+            date_from=date_from,
+            date_to=date_to,
+            status=status,
+            bill_statement=bill_statement,
+            bill_statement_id=bill_statement_id,
+            category=category,
+            category_id=category_id,
+            payment_method=payment_method,
+            payment_method_id=payment_method_id,
+            paid_by=paid_by,
+        )
+        where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        results = surreal_query(
+            "\n".join(
+                [
+                    f"SELECT * FROM expenses {where_clause} ORDER BY expense_date DESC, created_at DESC LIMIT {limit} START {offset};",
+                    f"SELECT count() FROM expenses {where_clause} GROUP ALL;",
+                ]
+            )
+        )
+        return ok(
+            {
+                "expenses": simplify_records(results[0]),
+                "total": count_result(results[1]),
+                "limit": limit,
+                "offset": offset,
+            }
+        )
+    except Exception as exc:
+        return fail(exc)
+
+
+@mcp.tool()
+def get_expenses_today(
+    limit: int = 50,
+    status: str | None = None,
+    paid_by: str | None = None,
+) -> dict[str, Any]:
+    """List today's expenses using the configured local timezone."""
+    try:
+        today = datetime.now(local_tz()).date().isoformat()
+        return list_expenses(
+            limit=limit,
+            date_from=today,
+            date_to=today,
+            status=status,
+            paid_by=paid_by,
+        )
+    except Exception as exc:
+        return fail(exc)
+
+
+@mcp.tool()
+def delete_expense(expense_id: str) -> dict[str, Any]:
+    """Delete one expense by id. Use list_expenses first if the id is unknown."""
+    try:
+        expense_id = clean_optional(expense_id)
+        if not expense_id:
+            raise ToolError("expense_id is required")
+
+        result = surreal_query(
+            f"DELETE FROM expenses WHERE id = {sql_record_id('expenses', expense_id)} RETURN BEFORE;"
+        )[0]
+        deleted = simplify_records(result)
+        if not deleted:
+            raise ToolError(f"Expense not found: {expense_id}")
+        return ok({"deleted_count": len(deleted), "deleted": deleted})
+    except Exception as exc:
+        return fail(exc)
+
+
+@mcp.tool()
+def delete_all_expenses(confirm: str) -> dict[str, Any]:
+    """Delete every expense transaction. The exact confirm value must be DELETE ALL EXPENSES."""
+    try:
+        if clean_optional(confirm) != DELETE_ALL_CONFIRMATION:
+            raise ToolError(f'To delete all expenses, pass confirm="{DELETE_ALL_CONFIRMATION}"')
+
+        result = surreal_query("DELETE FROM expenses RETURN BEFORE;")[0]
+        deleted = simplify_records(result)
+        return ok(
+            {
+                "deleted_count": len(deleted),
+                "sample": deleted[:10],
+                "note": "Deleted expenses only. Categories, payment methods, and bill statements were kept.",
+            }
+        )
     except Exception as exc:
         return fail(exc)
 
