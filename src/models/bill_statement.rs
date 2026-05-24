@@ -29,10 +29,10 @@ pub struct CreateBillStatementRequest {
 #[derive(Debug, Deserialize, Validate)]
 pub struct UpdateBillStatementRequest {
     pub name: Option<String>,
-    pub payment_method_id: Option<String>,
-    pub statement_date: Option<String>,
-    pub due_date: Option<String>,
-    pub description: Option<String>,
+    pub payment_method_id: Option<Option<String>>,
+    pub statement_date: Option<Option<String>>,
+    pub due_date: Option<Option<String>>,
+    pub description: Option<Option<String>>,
     pub is_active: Option<bool>,
 }
 

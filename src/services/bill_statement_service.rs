@@ -60,16 +60,16 @@ impl BillStatementService {
             bs.name = name;
         }
         if let Some(payment_method_id) = request.payment_method_id {
-            bs.payment_method_id = Some(payment_method_id);
+            bs.payment_method_id = payment_method_id;
         }
         if let Some(statement_date) = request.statement_date {
-            bs.statement_date = Some(statement_date);
+            bs.statement_date = statement_date;
         }
         if let Some(due_date) = request.due_date {
-            bs.due_date = Some(due_date);
+            bs.due_date = due_date;
         }
         if let Some(description) = request.description {
-            bs.description = Some(description);
+            bs.description = description;
         }
         if let Some(is_active) = request.is_active {
             bs.is_active = is_active;
