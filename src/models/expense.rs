@@ -96,6 +96,29 @@ pub struct BulkCreateExpensesResponse {
     pub count: usize,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BulkExpenseAction {
+    MoveBillStatement,
+    SetStatus,
+    Delete,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BulkExpenseActionRequest {
+    pub expense_ids: Vec<String>,
+    pub action: BulkExpenseAction,
+    pub status: Option<ExpenseStatus>,
+    pub bill_statement_id: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BulkExpenseActionResponse {
+    pub updated: Vec<ExpenseResponse>,
+    pub deleted_count: usize,
+    pub count: usize,
+}
+
 #[derive(Debug, Deserialize, Validate)]
 pub struct UpdateExpenseRequest {
     pub title: Option<String>,

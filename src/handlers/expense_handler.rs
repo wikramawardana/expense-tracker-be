@@ -8,8 +8,9 @@ use axum::{
 use crate::db::Database;
 use crate::errors::AppResult;
 use crate::models::{
-    ApiResponse, BulkCreateExpensesResponse, CreateExpenseRequest, CreateExpensesBulkRequest,
-    ExpenseQueryParams, ExpenseResponse, PaginatedExpensesResponse, UpdateExpenseRequest,
+    ApiResponse, BulkCreateExpensesResponse, BulkExpenseActionRequest, CreateExpenseRequest,
+    CreateExpensesBulkRequest, ExpenseQueryParams, ExpenseResponse, PaginatedExpensesResponse,
+    UpdateExpenseRequest,
 };
 use crate::repositories::{BillStatementRepository, ExpenseRepository, PaymentMethodRepository};
 use crate::services::ExpenseService;
@@ -61,6 +62,18 @@ impl ExpenseHandler {
                 response,
                 &format!("{} expense(s) created successfully", count),
             ),
+        ))
+    }
+
+    /// Apply one action to multiple expenses
+    pub async fn apply_bulk_action(
+        State(handler): State<Self>,
+        Json(request): Json<BulkExpenseActionRequest>,
+    ) -> AppResult<impl IntoResponse> {
+        let response = handler.service.apply_bulk_action(request).await?;
+        Ok(ApiResponse::success(
+            response,
+            "Bulk expense action completed successfully",
         ))
     }
 

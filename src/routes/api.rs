@@ -1,7 +1,7 @@
 use axum::{
     http::{header, Method},
     middleware,
-    routing::{delete, get, post, put},
+    routing::{delete, get, patch, post, put},
     Router,
 };
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
@@ -31,6 +31,7 @@ pub fn create_router(
             Method::GET,
             Method::POST,
             Method::PUT,
+            Method::PATCH,
             Method::DELETE,
             Method::OPTIONS,
         ])
@@ -50,6 +51,7 @@ pub fn create_router(
         .route("/expenses", post(ExpenseHandler::create))
         .route("/expenses", get(ExpenseHandler::get_all))
         .route("/expenses/bulk", post(ExpenseHandler::create_bulk))
+        .route("/expenses/bulk", patch(ExpenseHandler::apply_bulk_action))
         .route("/expenses/:id", get(ExpenseHandler::get_by_id))
         .route("/expenses/:id", put(ExpenseHandler::update))
         .route("/expenses/:id", delete(ExpenseHandler::delete))

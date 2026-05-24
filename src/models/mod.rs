@@ -13,7 +13,8 @@ pub use response::ApiResponse;
 
 pub mod expense;
 pub use expense::{
-    BulkCreateExpensesResponse, CreateExpenseRequest, CreateExpensesBulkRequest, Expense,
+    BulkCreateExpensesResponse, BulkExpenseAction, BulkExpenseActionRequest,
+    BulkExpenseActionResponse, CreateExpenseRequest, CreateExpensesBulkRequest, Expense,
     ExpensePaginationMeta, ExpenseQueryParams, ExpenseResponse, ExpenseStatus,
     PaginatedExpensesResponse, UpdateExpenseRequest,
 };

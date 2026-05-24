@@ -5,7 +5,8 @@ use validator::Validate;
 
 use crate::errors::{AppError, AppResult};
 use crate::models::{
-    BillStatement, CreateExpenseRequest, CreateExpensesBulkRequest, Expense, ExpensePaginationMeta,
+    BillStatement, BulkExpenseAction, BulkExpenseActionRequest, BulkExpenseActionResponse,
+    CreateExpenseRequest, CreateExpensesBulkRequest, Expense, ExpensePaginationMeta,
     ExpenseQueryParams, ExpenseResponse, ExpenseStatus, PaginatedExpensesResponse,
     UpdateExpenseRequest,
 };
@@ -198,6 +199,115 @@ impl ExpenseService {
         }
 
         Ok(created)
+    }
+
+    pub async fn apply_bulk_action(
+        &self,
+        request: BulkExpenseActionRequest,
+    ) -> AppResult<BulkExpenseActionResponse> {
+        let expense_ids = self.normalize_bulk_expense_ids(request.expense_ids)?;
+
+        let mut expenses = Vec::with_capacity(expense_ids.len());
+        for id in &expense_ids {
+            expenses.push(self.repository.find_by_id(id).await?);
+        }
+
+        match request.action {
+            BulkExpenseAction::Delete => {
+                for id in &expense_ids {
+                    self.repository.delete(id).await?;
+                }
+
+                Ok(BulkExpenseActionResponse {
+                    updated: Vec::new(),
+                    deleted_count: expense_ids.len(),
+                    count: expense_ids.len(),
+                })
+            }
+            BulkExpenseAction::SetStatus => {
+                let status = request.status.ok_or_else(|| {
+                    AppError::Validation("status is required for bulk status changes".to_string())
+                })?;
+                let now = Utc::now().to_rfc3339();
+                let mut updated = Vec::with_capacity(expense_ids.len());
+
+                for (id, mut expense) in expense_ids.iter().zip(expenses.into_iter()) {
+                    expense.status = status.clone();
+                    expense.updated_at = now.clone();
+                    updated.push(ExpenseResponse::from(
+                        self.repository.update(id, expense).await?,
+                    ));
+                }
+
+                Ok(BulkExpenseActionResponse {
+                    count: updated.len(),
+                    updated,
+                    deleted_count: 0,
+                })
+            }
+            BulkExpenseAction::MoveBillStatement => {
+                let bill_statement_id = request
+                    .bill_statement_id
+                    .filter(|id| !id.trim().is_empty())
+                    .ok_or_else(|| {
+                        AppError::Validation(
+                            "bill_statement_id is required for moving expenses".to_string(),
+                        )
+                    })?;
+                let bill_statement = self
+                    .bill_statement_repository
+                    .find_by_id(&bill_statement_id)
+                    .await?;
+                let now = Utc::now().to_rfc3339();
+                let mut updated = Vec::with_capacity(expense_ids.len());
+
+                for (id, mut expense) in expense_ids.iter().zip(expenses.into_iter()) {
+                    expense.bill_statement_id = Some(bill_statement_id.clone());
+                    expense.bill_statement = Some(bill_statement.name.clone());
+                    expense.updated_at = now.clone();
+                    updated.push(ExpenseResponse::from(
+                        self.repository.update(id, expense).await?,
+                    ));
+                }
+
+                Ok(BulkExpenseActionResponse {
+                    count: updated.len(),
+                    updated,
+                    deleted_count: 0,
+                })
+            }
+        }
+    }
+
+    fn normalize_bulk_expense_ids(&self, expense_ids: Vec<String>) -> AppResult<Vec<String>> {
+        if expense_ids.is_empty() {
+            return Err(AppError::Validation(
+                "At least one expense id is required".to_string(),
+            ));
+        }
+
+        let mut seen = std::collections::HashSet::new();
+        let mut normalized_ids = Vec::with_capacity(expense_ids.len());
+
+        for raw_id in expense_ids {
+            let id = raw_id
+                .trim()
+                .strip_prefix("expenses:")
+                .unwrap_or(raw_id.trim())
+                .to_string();
+
+            if id.is_empty() {
+                return Err(AppError::Validation(
+                    "Expense ids cannot contain empty values".to_string(),
+                ));
+            }
+
+            if seen.insert(id.clone()) {
+                normalized_ids.push(id);
+            }
+        }
+
+        Ok(normalized_ids)
     }
 
     fn format_bill_statement_name(&self, date_str: &str) -> String {
