@@ -163,6 +163,18 @@ def public_record(record: dict[str, Any]) -> dict[str, Any]:
     return item
 
 
+def strip_none_values(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: strip_none_values(item)
+            for key, item in value.items()
+            if item is not None
+        }
+    if isinstance(value, list):
+        return [strip_none_values(item) for item in value]
+    return value
+
+
 def simplify_records(records: Any) -> list[dict[str, Any]]:
     if not records:
         return []
@@ -221,7 +233,7 @@ def resolve_record(
 
 def create_record(table: str, payload: dict[str, Any]) -> dict[str, Any]:
     record_id = str(uuid.uuid4())
-    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    body = json.dumps(strip_none_values(payload), ensure_ascii=False, separators=(",", ":"))
     sql = f"CREATE {sql_record_id(table, record_id)} CONTENT {body};"
     result = surreal_query(sql)[0]
     records = simplify_records(result)
