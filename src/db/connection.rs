@@ -54,6 +54,7 @@ pub async fn init_db(cfg: &Config) -> Arc<DB> {
 }
 
 async fn seed_default_records(db: &DB) -> Result<(), surrealdb::Error> {
+    normalize_optional_category_fields(db).await?;
     ensure_recurrence_type(
         db,
         "Installment",
@@ -65,6 +66,19 @@ async fn seed_default_records(db: &DB) -> Result<(), surrealdb::Error> {
         "Subscription",
         Some("Software and service subscriptions"),
         Some("#6366F1"),
+    )
+    .await?;
+
+    Ok(())
+}
+
+async fn normalize_optional_category_fields(db: &DB) -> Result<(), surrealdb::Error> {
+    db.query(
+        r#"
+        UPDATE categories SET icon = NONE WHERE icon = null;
+        UPDATE categories SET color = NONE WHERE color = null;
+        UPDATE categories SET description = NONE WHERE description = null;
+        "#,
     )
     .await?;
 
@@ -118,18 +132,20 @@ async fn ensure_category(
 
     let now = Utc::now().to_rfc3339();
     let key = Uuid::new_v4().to_string();
-    let _: Option<Value> = db
-        .create(("categories", key))
-        .content(json!({
-            "name": name,
-            "icon": null,
-            "color": color,
-            "description": description,
-            "is_active": true,
-            "created_at": now,
-            "updated_at": now,
-        }))
-        .await?;
+    let mut content = json!({
+        "name": name,
+        "is_active": true,
+        "created_at": now,
+        "updated_at": now,
+    });
+    if let Some(color) = color {
+        content["color"] = json!(color);
+    }
+    if let Some(description) = description {
+        content["description"] = json!(description);
+    }
+
+    let _: Option<Value> = db.create(("categories", key)).content(content).await?;
 
     Ok(())
 }
