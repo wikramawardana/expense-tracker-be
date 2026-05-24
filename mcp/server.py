@@ -28,6 +28,11 @@ TABLES = {
 }
 
 ALLOWED_STATUSES = {"pending", "unpaid", "paid"}
+STATUS_STORAGE_VALUES = {
+    "pending": "Pending",
+    "unpaid": "Unpaid",
+    "paid": "Paid",
+}
 
 mcp = FastMCP("expense-tracker")
 
@@ -493,6 +498,7 @@ def create_expense(
         status = (clean_optional(status) or "pending").casefold()
         if status not in ALLOWED_STATUSES:
             raise ToolError("Status must be pending, unpaid, or paid")
+        status_storage = STATUS_STORAGE_VALUES[status]
 
         category_record = resolve_record(
             "categories",
@@ -525,7 +531,7 @@ def create_expense(
                 "payment_method_id": payment_record["id"],
                 "expense_date": expense_iso,
                 "description": clean_optional(description),
-                "status": status,
+                "status": status_storage,
                 "bill_statement": bill_record["name"],
                 "bill_statement_id": bill_record["id"],
                 "category_id": category_record["id"],
