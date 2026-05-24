@@ -38,7 +38,6 @@ pub async fn init_db(cfg: &Config) -> Arc<DB> {
         DEFINE TABLE IF NOT EXISTS bill_statements SCHEMALESS;
         DEFINE TABLE IF NOT EXISTS categories SCHEMALESS;
         DEFINE TABLE IF NOT EXISTS payment_methods SCHEMALESS;
-        DEFINE TABLE IF NOT EXISTS recurrence_types SCHEMALESS;
     "#;
     db.query(schema)
         .await
@@ -55,12 +54,6 @@ pub async fn init_db(cfg: &Config) -> Arc<DB> {
 
 async fn seed_default_records(db: &DB) -> Result<(), surrealdb::Error> {
     normalize_optional_category_fields(db).await?;
-    ensure_recurrence_type(
-        db,
-        "Installment",
-        "Fixed-count monthly installment schedule",
-    )
-    .await?;
     ensure_category(
         db,
         "Subscription",
@@ -81,36 +74,6 @@ async fn normalize_optional_category_fields(db: &DB) -> Result<(), surrealdb::Er
         "#,
     )
     .await?;
-
-    Ok(())
-}
-
-async fn ensure_recurrence_type(
-    db: &DB,
-    name: &str,
-    description: &str,
-) -> Result<(), surrealdb::Error> {
-    let mut existing = db
-        .query("SELECT name FROM recurrence_types WHERE name = $name LIMIT 1")
-        .bind(("name", name.to_string()))
-        .await?;
-    let rows: Vec<Value> = existing.take(0)?;
-    if !rows.is_empty() {
-        return Ok(());
-    }
-
-    let now = Utc::now().to_rfc3339();
-    let key = Uuid::new_v4().to_string();
-    let _: Option<Value> = db
-        .create(("recurrence_types", key))
-        .content(json!({
-            "name": name,
-            "description": description,
-            "is_active": true,
-            "created_at": now,
-            "updated_at": now,
-        }))
-        .await?;
 
     Ok(())
 }

@@ -23,7 +23,6 @@ TABLES = {
     "categories": "categories",
     "payment_methods": "payment_methods",
     "bill_statements": "bill_statements",
-    "recurrence_types": "recurrence_types",
     "expenses": "expenses",
 }
 
@@ -388,7 +387,6 @@ def context_payload() -> dict[str, list[dict[str, Any]]]:
         "categories": active_records("categories"),
         "payment_methods": active_records("payment_methods"),
         "bill_statements": active_records("bill_statements"),
-        "recurrence_types": active_records("recurrence_types"),
     }
 
 
@@ -495,7 +493,7 @@ def count_result(result: Any) -> int:
 
 @mcp.tool()
 def list_expense_context() -> dict[str, Any]:
-    """List active categories, payment methods, bill statements, and recurrence types before creating expenses."""
+    """List active categories, payment methods, and bill statements before creating expenses."""
     try:
         return ok(context_payload())
     except Exception as exc:

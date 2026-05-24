@@ -11,9 +11,7 @@ use crate::models::{
     ApiResponse, BulkCreateExpensesResponse, CreateExpenseRequest, CreateExpensesBulkRequest,
     ExpenseQueryParams, ExpenseResponse, PaginatedExpensesResponse, UpdateExpenseRequest,
 };
-use crate::repositories::{
-    BillStatementRepository, ExpenseRepository, PaymentMethodRepository, RecurrenceTypeRepository,
-};
+use crate::repositories::{BillStatementRepository, ExpenseRepository, PaymentMethodRepository};
 use crate::services::ExpenseService;
 
 #[derive(Clone)]
@@ -25,13 +23,11 @@ impl ExpenseHandler {
     pub fn new(db: Database) -> Self {
         let repository = ExpenseRepository::new(db.clone());
         let bill_statement_repository = BillStatementRepository::new(db.clone());
-        let payment_method_repository = PaymentMethodRepository::new(db.clone());
-        let recurrence_type_repository = RecurrenceTypeRepository::new(db);
+        let payment_method_repository = PaymentMethodRepository::new(db);
         let service = ExpenseService::new(
             repository,
             bill_statement_repository,
             payment_method_repository,
-            recurrence_type_repository,
         );
         Self { service }
     }

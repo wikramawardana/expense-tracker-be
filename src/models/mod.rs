@@ -32,11 +32,5 @@ pub use bill_statement::{
     UpdateBillStatementRequest,
 };
 
-pub mod recurrence_type;
-pub use recurrence_type::{
-    CreateRecurrenceTypeRequest, RecurrenceType, RecurrenceTypeResponse,
-    UpdateRecurrenceTypeRequest,
-};
-
 pub mod api_key;
 pub use api_key::{ApiKey, ApiKeyListItem, CreateApiKeyRequest, CreatedApiKeyResponse};

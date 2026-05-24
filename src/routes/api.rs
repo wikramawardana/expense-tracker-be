@@ -8,7 +8,6 @@ use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 use crate::handlers::{
     ApiKeyHandler, BillStatementHandler, CategoryHandler, ExpenseHandler, PaymentMethodHandler,
-    RecurrenceTypeHandler,
 };
 use crate::middleware::{auth_middleware, bot_auth_middleware, AuthState, BotAuthState};
 
@@ -18,7 +17,6 @@ pub fn create_router(
     payment_method_handler: PaymentMethodHandler,
     category_handler: CategoryHandler,
     bill_statement_handler: BillStatementHandler,
-    recurrence_type_handler: RecurrenceTypeHandler,
     api_key_handler: ApiKeyHandler,
     auth_state: AuthState,
     bot_auth_state: BotAuthState,
@@ -100,25 +98,6 @@ pub fn create_router(
             auth_middleware,
         ));
 
-    // ========== Protected Recurrence Type Routes ==========
-    let protected_recurrence_type_routes = Router::new()
-        .route("/recurrence-types", post(RecurrenceTypeHandler::create))
-        .route("/recurrence-types", get(RecurrenceTypeHandler::get_all))
-        .route(
-            "/recurrence-types/:id",
-            get(RecurrenceTypeHandler::get_by_id),
-        )
-        .route("/recurrence-types/:id", put(RecurrenceTypeHandler::update))
-        .route(
-            "/recurrence-types/:id",
-            delete(RecurrenceTypeHandler::delete),
-        )
-        .with_state(recurrence_type_handler)
-        .layer(middleware::from_fn_with_state(
-            auth_state.clone(),
-            auth_middleware,
-        ));
-
     // ========== Protected API Key Management Routes (session-authed) ==========
     let protected_api_key_routes = Router::new()
         .route("/api-keys", post(ApiKeyHandler::create))
@@ -173,7 +152,6 @@ pub fn create_router(
         .nest("/api/v1", protected_payment_method_routes)
         .nest("/api/v1", protected_category_routes)
         .nest("/api/v1", protected_bill_statement_routes)
-        .nest("/api/v1", protected_recurrence_type_routes)
         .nest("/api/v1", protected_api_key_routes)
         .nest("/api/v1", bot_expense_routes)
         .nest("/api/v1", bot_category_routes)

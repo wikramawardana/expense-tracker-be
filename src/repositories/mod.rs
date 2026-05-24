@@ -9,6 +9,3 @@ pub use category_repository::CategoryRepository;
 
 pub mod bill_statement_repository;
 pub use bill_statement_repository::BillStatementRepository;
-
-pub mod recurrence_type_repository;
-pub use recurrence_type_repository::RecurrenceTypeRepository;

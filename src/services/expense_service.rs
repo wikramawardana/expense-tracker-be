@@ -9,9 +9,7 @@ use crate::models::{
     ExpenseQueryParams, ExpenseResponse, ExpenseStatus, PaginatedExpensesResponse,
     UpdateExpenseRequest,
 };
-use crate::repositories::{
-    BillStatementRepository, ExpenseRepository, PaymentMethodRepository, RecurrenceTypeRepository,
-};
+use crate::repositories::{BillStatementRepository, ExpenseRepository, PaymentMethodRepository};
 
 fn parse_date(s: &str) -> Option<DateTime<Utc>> {
     s.parse::<DateTime<Utc>>().ok()
@@ -32,7 +30,6 @@ pub struct ExpenseService {
     repository: ExpenseRepository,
     bill_statement_repository: BillStatementRepository,
     payment_method_repository: PaymentMethodRepository,
-    recurrence_type_repository: RecurrenceTypeRepository,
 }
 
 impl ExpenseService {
@@ -40,13 +37,11 @@ impl ExpenseService {
         repository: ExpenseRepository,
         bill_statement_repository: BillStatementRepository,
         payment_method_repository: PaymentMethodRepository,
-        recurrence_type_repository: RecurrenceTypeRepository,
     ) -> Self {
         Self {
             repository,
             bill_statement_repository,
             payment_method_repository,
-            recurrence_type_repository,
         }
     }
 
@@ -72,17 +67,10 @@ impl ExpenseService {
         let now = Utc::now().to_rfc3339();
         let group_id = Uuid::new_v4().to_string();
 
-        let resolved_recurrence_type = self
-            .resolve_recurrence_type(&request.recurrence_type, &request.recurrence_type_id)
-            .await;
+        let resolved_recurrence_type =
+            self.resolve_recurrence_type(&request.recurrence_type, &request.recurrence_type_id);
 
         let is_installment = self.is_installment_schedule(&resolved_recurrence_type)?;
-
-        if is_installment && request.recurrence_type_id.is_none() {
-            return Err(AppError::Validation(
-                "recurrence_type_id is required for scheduled expenses".to_string(),
-            ));
-        }
 
         let (start_num, end_num) =
             self.calculate_range(&request, is_installment, &resolved_recurrence_type);
@@ -252,7 +240,7 @@ impl ExpenseService {
         ))
     }
 
-    async fn resolve_recurrence_type(
+    fn resolve_recurrence_type(
         &self,
         name: &Option<String>,
         id: &Option<String>,
@@ -263,10 +251,8 @@ impl ExpenseService {
             }
         }
 
-        if let Some(ref rt_id) = id {
-            if let Ok(rt) = self.recurrence_type_repository.find_by_id(rt_id).await {
-                return Some(rt.name);
-            }
+        if id.as_ref().is_some_and(|value| !value.is_empty()) {
+            return Some("installment".to_string());
         }
 
         None
@@ -402,13 +388,7 @@ impl ExpenseService {
         if let Some(ref recurrence_type_id) = request.recurrence_type_id {
             expense.recurrence_type_id = Some(recurrence_type_id.clone());
             if request.recurrence_type.is_none() {
-                if let Ok(rt) = self
-                    .recurrence_type_repository
-                    .find_by_id(recurrence_type_id)
-                    .await
-                {
-                    expense.recurrence_type = Some(rt.name);
-                }
+                expense.recurrence_type = Some("installment".to_string());
             }
         }
         if let Some(recurrence_type) = request.recurrence_type {
