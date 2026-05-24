@@ -76,28 +76,23 @@ impl ExpenseService {
             .resolve_recurrence_type(&request.recurrence_type, &request.recurrence_type_id)
             .await;
 
-        let is_recurring = if let Some(ref rt_name) = resolved_recurrence_type {
-            let lower = rt_name.to_lowercase();
-            lower != "none" && !lower.is_empty()
-        } else {
-            false
-        };
+        let is_installment = self.is_installment_schedule(&resolved_recurrence_type)?;
 
-        if is_recurring && request.recurrence_type_id.is_none() {
+        if is_installment && request.recurrence_type_id.is_none() {
             return Err(AppError::Validation(
-                "recurrence_type_id is required for recurring expenses".to_string(),
+                "recurrence_type_id is required for scheduled expenses".to_string(),
             ));
         }
 
         let (start_num, end_num) =
-            self.calculate_range(&request, is_recurring, &resolved_recurrence_type);
+            self.calculate_range(&request, is_installment, &resolved_recurrence_type);
         let total_to_create = if end_num >= start_num {
             end_num - start_num + 1
         } else {
             1
         };
 
-        let first_bill_statement_id = if is_recurring {
+        let first_bill_statement_id = if is_installment {
             Some(
                 self.get_or_create_bill_statement(&request.expense_date)
                     .await?,
@@ -106,7 +101,7 @@ impl ExpenseService {
             request.bill_statement_id.clone()
         };
 
-        let first_bill_statement_name = if is_recurring {
+        let first_bill_statement_name = if is_installment {
             Some(self.format_bill_statement_name(&request.expense_date))
         } else if let Some(ref name) = request.bill_statement {
             Some(name.clone())
@@ -160,13 +155,10 @@ impl ExpenseService {
         if total_to_create > 1 {
             for i in (start_num + 1)..=end_num {
                 let months_offset = i - start_num;
-                let future_date =
-                    add_months_to_date_str(&request.expense_date, months_offset);
+                let future_date = add_months_to_date_str(&request.expense_date, months_offset);
 
-                let bill_statement_id =
-                    self.get_or_create_bill_statement(&future_date).await.ok();
-                let bill_statement_name =
-                    Some(self.format_bill_statement_name(&future_date));
+                let bill_statement_id = self.get_or_create_bill_statement(&future_date).await.ok();
+                let bill_statement_name = Some(self.format_bill_statement_name(&future_date));
 
                 let future_expense = Expense {
                     id: RecordId::new("expenses", Uuid::new_v4().to_string()),
@@ -199,10 +191,7 @@ impl ExpenseService {
         Ok(created_first)
     }
 
-    pub async fn create_bulk(
-        &self,
-        request: CreateExpensesBulkRequest,
-    ) -> AppResult<Vec<Expense>> {
+    pub async fn create_bulk(&self, request: CreateExpensesBulkRequest) -> AppResult<Vec<Expense>> {
         if request.expenses.is_empty() {
             return Err(AppError::Validation(
                 "At least one expense is required".to_string(),
@@ -313,42 +302,20 @@ impl ExpenseService {
     fn calculate_range(
         &self,
         request: &CreateExpenseRequest,
-        is_recurring: bool,
+        is_installment: bool,
         resolved_recurrence_type: &Option<String>,
     ) -> (u32, u32) {
-        if !is_recurring {
+        if !is_installment {
             return (1, 1);
         }
 
-        let rt_name = resolved_recurrence_type
-            .as_ref()
-            .map(|s| s.to_lowercase());
+        let rt_name = resolved_recurrence_type.as_ref().map(|s| s.to_lowercase());
 
         match rt_name.as_deref() {
             Some("installment") => {
                 let total = request.recurrence_count.unwrap_or(1);
                 let start = request.recurrence_current.unwrap_or(1).max(1).min(total);
                 (start, total)
-            }
-            Some("subscription") | Some("recurring") => {
-                let total_months = if let Some(ref end_date_str) = request.recurrence_end_date {
-                    if let (Some(start_dt), Some(end_dt)) =
-                        (parse_date(&request.expense_date), parse_date(end_date_str))
-                    {
-                        let months_diff = (end_dt.year() - start_dt.year()) * 12
-                            + (end_dt.month() as i32 - start_dt.month() as i32);
-                        if months_diff >= 0 {
-                            ((months_diff + 1) as u32).min(120)
-                        } else {
-                            1
-                        }
-                    } else {
-                        12
-                    }
-                } else {
-                    12
-                };
-                (1, total_months)
             }
             _ => (1, 1),
         }
@@ -387,6 +354,8 @@ impl ExpenseService {
         let old_recurrence_type = expense.recurrence_type.clone();
         let old_recurrence_end_date = expense.recurrence_end_date.clone();
         let old_recurrence_group_id = expense.recurrence_group_id.clone();
+        let schedule_type_was_requested =
+            request.recurrence_type_id.is_some() || request.recurrence_type.is_some();
 
         if let Some(title) = request.title {
             expense.title = title;
@@ -461,6 +430,10 @@ impl ExpenseService {
             expense.recurrence_group_id = Some(recurrence_group_id);
         }
 
+        if schedule_type_was_requested {
+            self.is_installment_schedule(&expense.recurrence_type)?;
+        }
+
         expense.updated_at = Utc::now().to_rfc3339();
 
         let new_recurrence_type = expense.recurrence_type.clone();
@@ -524,29 +497,31 @@ impl ExpenseService {
         old_is_recurring && new_is_one_time
     }
 
+    fn is_installment_schedule(&self, recurrence_type: &Option<String>) -> AppResult<bool> {
+        let Some(rt_name) = recurrence_type else {
+            return Ok(false);
+        };
+
+        let lower = rt_name.to_lowercase();
+        if lower == "none" || lower.is_empty() {
+            return Ok(false);
+        }
+        if lower == "installment" {
+            return Ok(true);
+        }
+
+        Err(AppError::Validation(
+            "Only Installment schedule type is supported".to_string(),
+        ))
+    }
+
     fn should_extend_recurrence(
         &self,
-        old_end_date: &Option<String>,
-        new_end_date: &Option<String>,
-        recurrence_type: &Option<String>,
+        _old_end_date: &Option<String>,
+        _new_end_date: &Option<String>,
+        _recurrence_type: &Option<String>,
     ) -> bool {
-        let is_recurring = recurrence_type
-            .as_ref()
-            .map(|t| {
-                let lower = t.to_lowercase();
-                lower == "subscription" || lower == "recurring"
-            })
-            .unwrap_or(false);
-
-        if !is_recurring {
-            return false;
-        }
-
-        match (old_end_date, new_end_date) {
-            (Some(old), Some(new)) => new > old,
-            (None, Some(_)) => true,
-            _ => false,
-        }
+        false
     }
 
     async fn extend_recurring_expenses(&self, expense: &Expense) -> AppResult<()> {
@@ -590,8 +565,7 @@ impl ExpenseService {
                 .get_or_create_bill_statement(&current_date_str)
                 .await
                 .ok();
-            let bill_statement_name =
-                Some(self.format_bill_statement_name(&current_date_str));
+            let bill_statement_name = Some(self.format_bill_statement_name(&current_date_str));
 
             let new_expense = Expense {
                 id: RecordId::new("expenses", Uuid::new_v4().to_string()),

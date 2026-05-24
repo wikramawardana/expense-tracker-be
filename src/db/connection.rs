@@ -1,7 +1,10 @@
 use crate::config::Config;
+use chrono::Utc;
+use serde_json::{json, Value};
 use std::sync::Arc;
 use surrealdb::{engine::any::Any, opt::auth::Root, Surreal};
 use tokio::sync::OnceCell;
+use uuid::Uuid;
 
 pub type DB = Surreal<Any>;
 pub type Database = Arc<DB>;
@@ -41,7 +44,92 @@ pub async fn init_db(cfg: &Config) -> Arc<DB> {
         .await
         .expect("Failed to initialize SurrealDB schema");
 
+    seed_default_records(&db)
+        .await
+        .expect("Failed to initialize default data");
+
     let arc = Arc::new(db);
     DB_INSTANCE.set(arc.clone()).ok();
     arc
+}
+
+async fn seed_default_records(db: &DB) -> Result<(), surrealdb::Error> {
+    ensure_recurrence_type(
+        db,
+        "Installment",
+        "Fixed-count monthly installment schedule",
+    )
+    .await?;
+    ensure_category(
+        db,
+        "Subscription",
+        Some("Software and service subscriptions"),
+        Some("#6366F1"),
+    )
+    .await?;
+
+    Ok(())
+}
+
+async fn ensure_recurrence_type(
+    db: &DB,
+    name: &str,
+    description: &str,
+) -> Result<(), surrealdb::Error> {
+    let mut existing = db
+        .query("SELECT name FROM recurrence_types WHERE name = $name LIMIT 1")
+        .bind(("name", name.to_string()))
+        .await?;
+    let rows: Vec<Value> = existing.take(0)?;
+    if !rows.is_empty() {
+        return Ok(());
+    }
+
+    let now = Utc::now().to_rfc3339();
+    let key = Uuid::new_v4().to_string();
+    let _: Option<Value> = db
+        .create(("recurrence_types", key))
+        .content(json!({
+            "name": name,
+            "description": description,
+            "is_active": true,
+            "created_at": now,
+            "updated_at": now,
+        }))
+        .await?;
+
+    Ok(())
+}
+
+async fn ensure_category(
+    db: &DB,
+    name: &str,
+    description: Option<&str>,
+    color: Option<&str>,
+) -> Result<(), surrealdb::Error> {
+    let mut existing = db
+        .query("SELECT name FROM categories WHERE name = $name LIMIT 1")
+        .bind(("name", name.to_string()))
+        .await?;
+    let rows: Vec<Value> = existing.take(0)?;
+    if !rows.is_empty() {
+        return Ok(());
+    }
+
+    let now = Utc::now().to_rfc3339();
+    let key = Uuid::new_v4().to_string();
+    let _: Option<Value> = db
+        .create(("categories", key))
+        .content(json!({
+            "name": name,
+            "icon": null,
+            "color": color,
+            "description": description,
+            "is_active": true,
+            "created_at": now,
+            "updated_at": now,
+        }))
+        .await?;
+
+    Ok(())
 }
