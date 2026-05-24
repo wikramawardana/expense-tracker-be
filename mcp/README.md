@@ -1,6 +1,6 @@
 # Expense Tracker MCP
 
-MCP server for the `wiclaw-expense-tracker` Hermes agent.
+MCP server for the `wikrassist-expense` Hermes agent.
 
 Source path:
 
@@ -17,7 +17,7 @@ Production runtime path:
 Deployment:
 
 - The backend GitHub Action copies `mcp/server.py` and `mcp/README.md` to the production runtime path on every `main` deploy.
-- After copying, the deploy checks Python syntax and restarts `hermes-gateway-wiclaw-expense-tracker.service` when that service is already active.
+- After copying, the deploy checks Python syntax and restarts `hermes-gateway-wikrassist-expense.service` when that service is already active.
 
 It connects directly to the production SurrealDB HTTP endpoint from the VPS and loads credentials from:
 

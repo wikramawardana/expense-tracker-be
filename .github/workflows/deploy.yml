@@ -90,8 +90,8 @@ jobs:
             if [ -f /home/wikra/production-projects/expense-tracker/mcp/server.py ]; then
               chmod 700 /home/wikra/production-projects/expense-tracker/mcp/server.py
               /home/wikra/.hermes/hermes-agent/venv/bin/python -m py_compile /home/wikra/production-projects/expense-tracker/mcp/server.py
-              if systemctl --user is-active --quiet hermes-gateway-wiclaw-expense-tracker.service; then
-                systemctl --user restart hermes-gateway-wiclaw-expense-tracker.service || true
+              if systemctl --user is-active --quiet hermes-gateway-wikrassist-expense.service; then
+                systemctl --user restart hermes-gateway-wikrassist-expense.service || true
               fi
             fi
 
