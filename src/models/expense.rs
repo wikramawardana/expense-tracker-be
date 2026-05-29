@@ -57,7 +57,6 @@ pub struct Expense {
     pub recurrence_type_id: Option<String>,
     pub recurrence_count: Option<u32>,
     pub recurrence_current: Option<u32>,
-    pub recurrence_total_amount: Option<f64>,
     pub recurrence_end_date: Option<String>,
     pub recurrence_group_id: Option<String>,
     pub created_at: String,
@@ -81,7 +80,6 @@ pub struct CreateExpenseRequest {
     pub recurrence_type_id: Option<String>,
     pub recurrence_count: Option<u32>,
     pub recurrence_current: Option<u32>,
-    pub recurrence_total_amount: Option<f64>,
     pub recurrence_end_date: Option<String>,
 }
 
@@ -136,7 +134,6 @@ pub struct UpdateExpenseRequest {
     pub recurrence_type_id: Option<String>,
     pub recurrence_count: Option<u32>,
     pub recurrence_current: Option<u32>,
-    pub recurrence_total_amount: Option<f64>,
     pub recurrence_end_date: Option<String>,
     pub recurrence_group_id: Option<String>,
     #[serde(default)]
@@ -161,7 +158,6 @@ pub struct ExpenseResponse {
     pub recurrence_type_id: Option<String>,
     pub recurrence_count: Option<u32>,
     pub recurrence_current: Option<u32>,
-    pub recurrence_total_amount: Option<f64>,
     pub recurrence_end_date: Option<String>,
     pub recurrence_group_id: Option<String>,
     pub created_at: String,
@@ -187,7 +183,6 @@ impl From<Expense> for ExpenseResponse {
             recurrence_type_id: expense.recurrence_type_id,
             recurrence_count: expense.recurrence_count,
             recurrence_current: expense.recurrence_current,
-            recurrence_total_amount: expense.recurrence_total_amount,
             recurrence_end_date: expense.recurrence_end_date,
             recurrence_group_id: expense.recurrence_group_id,
             created_at: expense.created_at,

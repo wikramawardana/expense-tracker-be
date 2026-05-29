@@ -58,7 +58,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"iPhone 16 Pro\",\n  \"amount\": \"1500000\",\n  \"payment_method_id\": \"YOUR_PAYMENT_METHOD_ID\",\n  \"expense_date\": \"2026-01-15T00:00:00Z\",\n  \"description\": \"Cicilan HP\",\n  \"bill_statement_id\": \"YOUR_BILL_STATEMENT_ID\",\n  \"category_id\": \"YOUR_CATEGORY_ID\",\n  \"recurrence_type_id\": \"YOUR_RECURRENCE_TYPE_ID\",\n  \"recurrence_type\": \"installment\",\n  \"recurrence_count\": 12,\n  \"recurrence_total_amount\": \"18000000\",\n  \"paid_by\": \"Wikra\"\n}"
+              "raw": "{\n  \"title\": \"iPhone 16 Pro\",\n  \"amount\": \"1500000\",\n  \"payment_method_id\": \"YOUR_PAYMENT_METHOD_ID\",\n  \"expense_date\": \"2026-01-15T00:00:00Z\",\n  \"description\": \"Cicilan HP\",\n  \"bill_statement_id\": \"YOUR_BILL_STATEMENT_ID\",\n  \"category_id\": \"YOUR_CATEGORY_ID\",\n  \"recurrence_type_id\": \"YOUR_RECURRENCE_TYPE_ID\",\n  \"recurrence_type\": \"installment\",\n  \"recurrence_count\": 12,\n  \"paid_by\": \"Wikra\"\n}"
             }
           }
         },

@@ -795,7 +795,6 @@ def create_expense(
                 "recurrence_type_id": None,
                 "recurrence_count": None,
                 "recurrence_current": None,
-                "recurrence_total_amount": None,
                 "recurrence_end_date": None,
                 "recurrence_group_id": None,
                 "created_at": created_at,

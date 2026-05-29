@@ -72,6 +72,12 @@ impl ExpenseService {
             self.resolve_recurrence_type(&request.recurrence_type, &request.recurrence_type_id);
 
         let is_installment = self.is_installment_schedule(&resolved_recurrence_type)?;
+        if is_installment {
+            self.validate_installment_progress(
+                request.recurrence_count,
+                request.recurrence_current,
+            )?;
+        }
 
         let (start_num, end_num) =
             self.calculate_range(&request, is_installment, &resolved_recurrence_type);
@@ -128,7 +134,6 @@ impl ExpenseService {
             } else {
                 None
             },
-            recurrence_total_amount: request.recurrence_total_amount,
             recurrence_end_date: request.recurrence_end_date.clone(),
             recurrence_group_id: if total_to_create > 1 {
                 Some(group_id.clone())
@@ -166,7 +171,6 @@ impl ExpenseService {
                     recurrence_type_id: request.recurrence_type_id.clone(),
                     recurrence_count: request.recurrence_count,
                     recurrence_current: Some(i),
-                    recurrence_total_amount: request.recurrence_total_amount,
                     recurrence_end_date: request.recurrence_end_date.clone(),
                     recurrence_group_id: Some(group_id.clone()),
                     created_at: now.clone(),
@@ -510,9 +514,6 @@ impl ExpenseService {
         if let Some(recurrence_current) = request.recurrence_current {
             expense.recurrence_current = Some(recurrence_current);
         }
-        if let Some(recurrence_total_amount) = request.recurrence_total_amount {
-            expense.recurrence_total_amount = Some(recurrence_total_amount);
-        }
         if let Some(recurrence_end_date) = request.recurrence_end_date {
             expense.recurrence_end_date = Some(recurrence_end_date);
         }
@@ -521,7 +522,13 @@ impl ExpenseService {
         }
 
         if schedule_type_was_requested {
-            self.is_installment_schedule(&expense.recurrence_type)?;
+            let is_installment = self.is_installment_schedule(&expense.recurrence_type)?;
+            if is_installment {
+                self.validate_installment_progress(
+                    expense.recurrence_count,
+                    expense.recurrence_current,
+                )?;
+            }
         }
 
         expense.updated_at = Utc::now().to_rfc3339();
@@ -543,7 +550,6 @@ impl ExpenseService {
             expense.recurrence_current = None;
             expense.recurrence_count = None;
             expense.recurrence_end_date = None;
-            expense.recurrence_total_amount = None;
         } else {
             let should_extend = self.should_extend_recurrence(
                 &old_recurrence_end_date,
@@ -603,6 +609,35 @@ impl ExpenseService {
         Err(AppError::Validation(
             "Only Installment schedule type is supported".to_string(),
         ))
+    }
+
+    fn validate_installment_progress(
+        &self,
+        recurrence_count: Option<u32>,
+        recurrence_current: Option<u32>,
+    ) -> AppResult<()> {
+        let Some(total) = recurrence_count else {
+            return Err(AppError::Validation(
+                "recurrence_count is required for installment expenses".to_string(),
+            ));
+        };
+
+        if total == 0 {
+            return Err(AppError::Validation(
+                "recurrence_count must be at least 1".to_string(),
+            ));
+        }
+
+        if let Some(current) = recurrence_current {
+            if current == 0 || current > total {
+                return Err(AppError::Validation(format!(
+                    "recurrence_current must be between 1 and {}",
+                    total
+                )));
+            }
+        }
+
+        Ok(())
     }
 
     fn should_extend_recurrence(
@@ -674,7 +709,6 @@ impl ExpenseService {
                 recurrence_type_id: expense.recurrence_type_id.clone(),
                 recurrence_count: expense.recurrence_count,
                 recurrence_current: Some(current_num),
-                recurrence_total_amount: expense.recurrence_total_amount,
                 recurrence_end_date: expense.recurrence_end_date.clone(),
                 recurrence_group_id: Some(group_id.clone()),
                 created_at: now.clone(),

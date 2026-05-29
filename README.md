@@ -271,8 +271,7 @@ curl -X POST http://localhost:8000/api/v1/expenses \
     "expense_date": "2026-01-15T00:00:00Z",
     "description": "Cicilan HP",
     "recurrence_type": "installment",
-    "recurrence_count": 12,
-    "recurrence_total_amount": 18000000
+    "recurrence_count": 12
   }'
 ```
 
