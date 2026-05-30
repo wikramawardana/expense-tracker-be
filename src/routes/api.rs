@@ -7,7 +7,8 @@ use axum::{
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 use crate::handlers::{
-    ApiKeyHandler, BillStatementHandler, CategoryHandler, ExpenseHandler, PaymentMethodHandler,
+    ApiKeyHandler, BillStatementHandler, CategoryHandler, ExpenseHandler, PaidByHandler,
+    PaymentMethodHandler,
 };
 use crate::middleware::{auth_middleware, bot_auth_middleware, AuthState, BotAuthState};
 
@@ -18,6 +19,7 @@ pub fn create_router(
     category_handler: CategoryHandler,
     bill_statement_handler: BillStatementHandler,
     api_key_handler: ApiKeyHandler,
+    paid_by_handler: PaidByHandler,
     auth_state: AuthState,
     bot_auth_state: BotAuthState,
 ) -> Router {
@@ -111,6 +113,19 @@ pub fn create_router(
             auth_middleware,
         ));
 
+    // ========== Protected Paid By Routes ==========
+    let protected_paid_by_routes = Router::new()
+        .route("/paid-by", post(PaidByHandler::create))
+        .route("/paid-by", get(PaidByHandler::get_all))
+        .route("/paid-by/:id", get(PaidByHandler::get_by_id))
+        .route("/paid-by/:id", put(PaidByHandler::update))
+        .route("/paid-by/:id", delete(PaidByHandler::delete))
+        .with_state(paid_by_handler.clone())
+        .layer(middleware::from_fn_with_state(
+            auth_state.clone(),
+            auth_middleware,
+        ));
+
     // ========== Bot Routes (API-key authed, for openclaw / Discord / etc.) ==========
     // Intentionally a narrow surface: create expenses + read the metadata the
     // bot needs to pick category/payment-method/bill-statement IDs.
@@ -144,6 +159,14 @@ pub fn create_router(
         .route("/bot/bill-statements", get(BillStatementHandler::get_all))
         .with_state(bill_statement_handler)
         .layer(middleware::from_fn_with_state(
+            bot_auth_state.clone(),
+            bot_auth_middleware,
+        ));
+
+    let bot_paid_by_routes = Router::new()
+        .route("/bot/paid-by", get(PaidByHandler::get_all))
+        .with_state(paid_by_handler)
+        .layer(middleware::from_fn_with_state(
             bot_auth_state,
             bot_auth_middleware,
         ));
@@ -155,10 +178,12 @@ pub fn create_router(
         .nest("/api/v1", protected_category_routes)
         .nest("/api/v1", protected_bill_statement_routes)
         .nest("/api/v1", protected_api_key_routes)
+        .nest("/api/v1", protected_paid_by_routes)
         .nest("/api/v1", bot_expense_routes)
         .nest("/api/v1", bot_category_routes)
         .nest("/api/v1", bot_payment_method_routes)
         .nest("/api/v1", bot_bill_statement_routes)
+        .nest("/api/v1", bot_paid_by_routes)
         .layer(cors)
         .layer(TraceLayer::new_for_http())
 }

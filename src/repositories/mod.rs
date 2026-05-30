@@ -9,3 +9,6 @@ pub use category_repository::CategoryRepository;
 
 pub mod bill_statement_repository;
 pub use bill_statement_repository::BillStatementRepository;
+
+pub mod paid_by_repository;
+pub use paid_by_repository::PaidByRepository;

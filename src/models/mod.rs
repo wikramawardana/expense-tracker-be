@@ -35,3 +35,6 @@ pub use bill_statement::{
 
 pub mod api_key;
 pub use api_key::{ApiKey, ApiKeyListItem, CreateApiKeyRequest, CreatedApiKeyResponse};
+
+pub mod paid_by;
+pub use paid_by::{CreatePaidByRequest, PaidBy, PaidByResponse, UpdatePaidByRequest};

@@ -68,6 +68,7 @@ async fn main() {
     let payment_method_handler = handlers::PaymentMethodHandler::new(db_instance.clone());
     let category_handler = handlers::CategoryHandler::new(db_instance.clone());
     let bill_statement_handler = handlers::BillStatementHandler::new(db_instance.clone());
+    let paid_by_handler = handlers::PaidByHandler::new(db_instance.clone());
     let api_key_handler = handlers::ApiKeyHandler::new(ApiKeyService::new(pg_pool));
 
     // Build the router
@@ -77,6 +78,7 @@ async fn main() {
         category_handler,
         bill_statement_handler,
         api_key_handler,
+        paid_by_handler,
         auth_state,
         bot_auth_state,
     )

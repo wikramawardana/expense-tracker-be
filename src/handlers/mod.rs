@@ -12,3 +12,6 @@ pub use bill_statement_handler::BillStatementHandler;
 
 pub mod api_key_handler;
 pub use api_key_handler::ApiKeyHandler;
+
+pub mod paid_by_handler;
+pub use paid_by_handler::PaidByHandler;
