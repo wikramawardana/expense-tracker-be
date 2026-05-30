@@ -87,18 +87,9 @@ impl ExpenseService {
             1
         };
 
-        let first_bill_statement_id = if is_installment {
-            Some(
-                self.get_or_create_bill_statement(&request.expense_date)
-                    .await?,
-            )
-        } else {
-            request.bill_statement_id.clone()
-        };
+        let first_bill_statement_id = request.bill_statement_id.clone();
 
-        let first_bill_statement_name = if is_installment {
-            Some(self.format_bill_statement_name(&request.expense_date))
-        } else if let Some(ref name) = request.bill_statement {
+        let first_bill_statement_name = if let Some(ref name) = request.bill_statement {
             Some(name.clone())
         } else if let Some(ref bs_id) = request.bill_statement_id {
             self.bill_statement_repository
@@ -268,6 +259,20 @@ impl ExpenseService {
                 for (id, mut expense) in expense_ids.iter().zip(expenses.into_iter()) {
                     expense.bill_statement_id = Some(bill_statement_id.clone());
                     expense.bill_statement = Some(bill_statement.name.clone());
+
+                    // Auto-increment recurrence_current for installment expenses
+                    if expense.recurrence_type.as_deref() == Some("installment") {
+                        if let Some(current) = expense.recurrence_current {
+                            let max = expense.recurrence_count.unwrap_or(u32::MAX);
+                            if current < max {
+                                expense.recurrence_current = Some(current + 1);
+                                // Also advance the expense_date by 1 month
+                                expense.expense_date =
+                                    add_months_to_date_str(&expense.expense_date, 1);
+                            }
+                        }
+                    }
+
                     expense.updated_at = now.clone();
                     updated.push(ExpenseResponse::from(
                         self.repository.update(id, expense).await?,
@@ -415,7 +420,8 @@ impl ExpenseService {
             Some("installment") => {
                 let total = request.recurrence_count.unwrap_or(1);
                 let start = request.recurrence_current.unwrap_or(1).max(1).min(total);
-                (start, total)
+                // Only create ONE expense, not the full range
+                (start, start)
             }
             _ => (1, 1),
         }
