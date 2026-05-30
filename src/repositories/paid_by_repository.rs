@@ -30,7 +30,7 @@ impl PaidByRepository {
     pub async fn find_all(&self) -> AppResult<Vec<PaidBy>> {
         let sql = "SELECT * FROM paid_by ORDER BY name ASC";
         let mut result = self.db.query(sql).await?;
-        let items: Vec<PaidBy> = result.take(0)?;
+        let items: Vec<PaidBy> = result.take(0).unwrap_or_default();
         Ok(items)
     }
 
