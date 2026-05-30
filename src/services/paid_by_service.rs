@@ -47,6 +47,9 @@ impl PaidByService {
         let mut pb = self.repository.find_by_id(id).await?;
 
         if let Some(name) = request.name {
+            if name.trim().is_empty() {
+                return Err(AppError::Validation("Name cannot be empty".to_string()));
+            }
             pb.name = name;
         }
         if let Some(is_active) = request.is_active {
