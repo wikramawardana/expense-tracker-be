@@ -50,6 +50,26 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  update-gitops:
+    name: Update GitOps
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Update image tag in GitOps repo
+        env:
+          GITOPS_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          git clone https://x-access-token:${GITOPS_TOKEN}@github.com/wikramawardana/wikra-gitops.git
+          cd wikra-gitops
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          sed -i "s|newTag:.*|newTag: ${SHORT_SHA}|" manifests/expense-tracker-be/overlays/prod/kustomization.yaml
+          git add manifests/expense-tracker-be/overlays/prod/kustomization.yaml
+          git diff --staged --quiet || git commit -m "deploy expense-tracker-be ${SHORT_SHA}"
+          git push
+
   deploy:
     name: Deploy to VPS
     runs-on: ubuntu-latest
