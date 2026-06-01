@@ -60,6 +60,10 @@ jobs:
         env:
           GITOPS_TOKEN: ${{ secrets.GITOPS_TOKEN }}
         run: |
+          if [ -z "${GITOPS_TOKEN}" ]; then
+            echo "::warning::GITOPS_TOKEN secret is not set – skipping GitOps update"
+            exit 0
+          fi
           SHORT_SHA="${GITHUB_SHA::7}"
           git clone https://x-access-token:${GITOPS_TOKEN}@github.com/wikramawardana/wikra-gitops.git
           cd wikra-gitops
@@ -96,14 +100,18 @@ jobs:
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT }}
+          envs: GHCR_TOKEN,GHCR_USER
           script: |
             cd /home/wikra/production-projects
-            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
             docker compose pull expense-tracker-api
             docker compose up -d expense-tracker-api
             docker image prune -f
