@@ -187,6 +187,23 @@ Error responses:
 }
 ```
 
+## Production Deployment
+
+Production image tags use the short git SHA. After you push to `main`, GitHub
+Actions builds and pushes `ghcr.io/wikramawardana/expense-tracker-be:<short-sha>`.
+If the build succeeds and `GITOPS_TOKEN` is configured, the workflow updates
+GitOps automatically:
+
+`wikra-gitops/manifests/expense-tracker-be/overlays/prod/kustomization.yaml`
+
+So the normal flow is:
+
+1. Edit this repo.
+2. Commit and push to `main`.
+3. Wait for the GitHub Actions build to succeed.
+4. Confirm the workflow committed the new GitOps `newTag`.
+5. Wait for Argo CD to show `expense-tracker-be` as `Synced` and `Healthy`.
+
 ## Environment Variables
 
 | Variable          | Description              | Example                 |
