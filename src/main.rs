@@ -10,10 +10,9 @@ mod services;
 
 use config::load;
 use db::init_db;
-use middleware::{AuthState, BotAuthState};
+use middleware::{request_log, AuthState, BotAuthState};
 use services::ApiKeyService;
 use sqlx::postgres::PgPoolOptions;
-use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -82,7 +81,7 @@ async fn main() {
         auth_state,
         bot_auth_state,
     )
-    .layer(TraceLayer::new_for_http());
+    .layer(axum::middleware::from_fn(request_log));
 
     // Start the server
     let host = std::env::var("SERVER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());

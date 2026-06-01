@@ -4,7 +4,7 @@ use axum::{
     routing::{delete, get, patch, post, put},
     Router,
 };
-use tower_http::{cors::CorsLayer, trace::TraceLayer};
+use tower_http::cors::CorsLayer;
 
 use crate::handlers::{
     ApiKeyHandler, BillStatementHandler, CategoryHandler, ExpenseHandler, PaidByHandler,
@@ -185,7 +185,6 @@ pub fn create_router(
         .nest("/api/v1", bot_bill_statement_routes)
         .nest("/api/v1", bot_paid_by_routes)
         .layer(cors)
-        .layer(TraceLayer::new_for_http())
 }
 
 /// Health check endpoint
