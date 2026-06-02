@@ -1,5 +1,5 @@
 pub mod expense_service;
-pub use expense_service::ExpenseService;
+pub use expense_service::{ExpenseService, EXPENSE_IMPORT_TEMPLATE};
 
 pub mod payment_method_service;
 pub use payment_method_service::PaymentMethodService;

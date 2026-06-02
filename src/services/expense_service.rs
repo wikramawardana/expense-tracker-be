@@ -1,4 +1,5 @@
 use chrono::{DateTime, Datelike, Months, Utc};
+use serde::Deserialize;
 use surrealdb::types::RecordId;
 use uuid::Uuid;
 use validator::Validate;
@@ -10,10 +11,215 @@ use crate::models::{
     ExpenseQueryParams, ExpenseResponse, ExpenseStatus, PaginatedExpensesResponse,
     UpdateExpenseRequest,
 };
-use crate::repositories::{BillStatementRepository, ExpenseRepository, PaymentMethodRepository};
+use crate::repositories::{
+    BillStatementRepository, CategoryRepository, ExpenseRepository, PaymentMethodRepository,
+};
+
+#[derive(Debug, Deserialize)]
+struct ExpenseCsvRow {
+    title: String,
+    amount: String,
+    expense_date: String,
+    #[serde(default)]
+    category_id: Option<String>,
+    #[serde(default)]
+    category: Option<String>,
+    #[serde(default)]
+    bill_statement_id: Option<String>,
+    #[serde(default)]
+    bill_statement: Option<String>,
+    #[serde(default)]
+    payment_method_id: Option<String>,
+    #[serde(default)]
+    payment_method: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    paid_by: Option<String>,
+    #[serde(default)]
+    recurrence_type: Option<String>,
+    #[serde(default)]
+    recurrence_count: Option<String>,
+    #[serde(default)]
+    recurrence_current: Option<String>,
+    #[serde(default)]
+    recurrence_end_date: Option<String>,
+}
+
+pub const EXPENSE_IMPORT_TEMPLATE: &str = "title,amount,expense_date,category_id,category,bill_statement_id,bill_statement,payment_method_id,payment_method,description,paid_by,recurrence_type,recurrence_count,recurrence_current,recurrence_end_date\nLunch at restaurant,75000,2026-06-02,,Food,,June 2026,,Cash,Team lunch,Wikra,,,,\nLaptop installment,1250000,2026-06-02,,Office,,June 2026,,Credit Card,Monthly payment,Wikra,installment,12,1,\n";
 
 fn parse_date(s: &str) -> Option<DateTime<Utc>> {
     s.parse::<DateTime<Utc>>().ok()
+}
+
+fn clean_option(value: Option<String>) -> Option<String> {
+    value.and_then(|v| {
+        let trimmed = v.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
+}
+
+fn required_text(value: String, row_number: usize, field: &str) -> AppResult<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(AppError::Validation(format!(
+            "CSV row {}: {} is required",
+            row_number, field
+        )));
+    }
+    Ok(trimmed.to_string())
+}
+
+fn parse_amount(value: &str, row_number: usize) -> AppResult<f64> {
+    let normalized = value
+        .trim()
+        .replace("Rp", "")
+        .replace("IDR", "")
+        .replace(',', "")
+        .replace(' ', "");
+
+    let amount = normalized.parse::<f64>().map_err(|_| {
+        AppError::Validation(format!(
+            "CSV row {}: amount must be a valid number",
+            row_number
+        ))
+    })?;
+
+    if amount <= 0.0 {
+        return Err(AppError::Validation(format!(
+            "CSV row {}: amount must be greater than 0",
+            row_number
+        )));
+    }
+
+    Ok(amount)
+}
+
+fn parse_csv_date(value: &str, row_number: usize, field: &str) -> AppResult<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(AppError::Validation(format!(
+            "CSV row {}: {} is required",
+            row_number, field
+        )));
+    }
+
+    if let Ok(dt) = trimmed.parse::<DateTime<Utc>>() {
+        return Ok(dt.to_rfc3339());
+    }
+
+    let date = chrono::NaiveDate::parse_from_str(trimmed, "%Y-%m-%d").map_err(|_| {
+        AppError::Validation(format!(
+            "CSV row {}: {} must be YYYY-MM-DD or RFC3339",
+            row_number, field
+        ))
+    })?;
+
+    let dt = date
+        .and_hms_opt(0, 0, 0)
+        .ok_or_else(|| AppError::Validation(format!("CSV row {}: invalid date", row_number)))?
+        .and_utc();
+    Ok(dt.to_rfc3339())
+}
+
+fn parse_optional_u32(
+    value: Option<String>,
+    row_number: usize,
+    field: &str,
+) -> AppResult<Option<u32>> {
+    let Some(value) = clean_option(value) else {
+        return Ok(None);
+    };
+
+    value.parse::<u32>().map(Some).map_err(|_| {
+        AppError::Validation(format!(
+            "CSV row {}: {} must be a whole number",
+            row_number, field
+        ))
+    })
+}
+
+fn resolve_lookup<T>(
+    id: Option<String>,
+    name: Option<String>,
+    records: &[T],
+    get_name: impl Fn(&T) -> &str,
+    get_id: impl Fn(&T) -> String,
+    row_number: usize,
+    label: &str,
+) -> AppResult<String> {
+    if let Some(id) = id {
+        if records.iter().any(|record| get_id(record) == id) {
+            return Ok(id);
+        }
+        return Err(AppError::Validation(format!(
+            "CSV row {}: {}_id '{}' was not found",
+            row_number, label, id
+        )));
+    }
+
+    if let Some(name) = name {
+        if let Some(record) = records
+            .iter()
+            .find(|record| get_name(record).eq_ignore_ascii_case(&name))
+        {
+            return Ok(get_id(record));
+        }
+        return Err(AppError::Validation(format!(
+            "CSV row {}: {} '{}' was not found",
+            row_number, label, name
+        )));
+    }
+
+    Err(AppError::Validation(format!(
+        "CSV row {}: {}_id or {} is required",
+        row_number, label, label
+    )))
+}
+
+fn resolve_payment_method_row(
+    id: Option<String>,
+    name: Option<String>,
+    records: &[crate::models::PaymentMethod],
+    row_number: usize,
+) -> AppResult<(String, String)> {
+    if let Some(id) = id {
+        if let Some(record) = records
+            .iter()
+            .find(|record| crate::models::record_key_to_string(&record.id.key) == id)
+        {
+            return Ok((id, record.name.clone()));
+        }
+        return Err(AppError::Validation(format!(
+            "CSV row {}: payment_method_id '{}' was not found",
+            row_number, id
+        )));
+    }
+
+    if let Some(name) = name {
+        if let Some(record) = records
+            .iter()
+            .find(|record| record.name.eq_ignore_ascii_case(&name))
+        {
+            return Ok((
+                crate::models::record_key_to_string(&record.id.key),
+                record.name.clone(),
+            ));
+        }
+        return Err(AppError::Validation(format!(
+            "CSV row {}: payment_method '{}' was not found",
+            row_number, name
+        )));
+    }
+
+    Err(AppError::Validation(format!(
+        "CSV row {}: payment_method_id or payment_method is required",
+        row_number
+    )))
 }
 
 fn add_months_to_date_str(date_str: &str, months: u32) -> String {
@@ -29,6 +235,7 @@ fn add_months_to_date_str(date_str: &str, months: u32) -> String {
 #[derive(Clone)]
 pub struct ExpenseService {
     repository: ExpenseRepository,
+    category_repository: CategoryRepository,
     bill_statement_repository: BillStatementRepository,
     payment_method_repository: PaymentMethodRepository,
 }
@@ -36,11 +243,13 @@ pub struct ExpenseService {
 impl ExpenseService {
     pub fn new(
         repository: ExpenseRepository,
+        category_repository: CategoryRepository,
         bill_statement_repository: BillStatementRepository,
         payment_method_repository: PaymentMethodRepository,
     ) -> Self {
         Self {
             repository,
+            category_repository,
             bill_statement_repository,
             payment_method_repository,
         }
@@ -196,6 +405,45 @@ impl ExpenseService {
         Ok(created)
     }
 
+    pub async fn import_csv(&self, bytes: &[u8]) -> AppResult<Vec<Expense>> {
+        if bytes.is_empty() {
+            return Err(AppError::Validation("CSV file cannot be empty".to_string()));
+        }
+
+        let categories = self.category_repository.find_all().await?;
+        let bill_statements = self.bill_statement_repository.find_all().await?;
+        let payment_methods = self.payment_method_repository.find_all().await?;
+
+        let mut reader = csv::ReaderBuilder::new()
+            .trim(csv::Trim::All)
+            .flexible(true)
+            .from_reader(bytes);
+        let mut requests = Vec::new();
+
+        for (idx, row) in reader.deserialize::<ExpenseCsvRow>().enumerate() {
+            let row_number = idx + 2;
+            let row = row.map_err(|e| {
+                AppError::Validation(format!("CSV row {} could not be read: {}", row_number, e))
+            })?;
+            requests.push(self.csv_row_to_request(
+                row,
+                row_number,
+                &categories,
+                &bill_statements,
+                &payment_methods,
+            )?);
+        }
+
+        if requests.is_empty() {
+            return Err(AppError::Validation(
+                "CSV file must contain at least one expense row".to_string(),
+            ));
+        }
+
+        self.create_bulk(CreateExpensesBulkRequest { expenses: requests })
+            .await
+    }
+
     pub async fn apply_bulk_action(
         &self,
         request: BulkExpenseActionRequest,
@@ -317,6 +565,79 @@ impl ExpenseService {
         }
 
         Ok(normalized_ids)
+    }
+
+    fn csv_row_to_request(
+        &self,
+        row: ExpenseCsvRow,
+        row_number: usize,
+        categories: &[crate::models::Category],
+        bill_statements: &[crate::models::BillStatement],
+        payment_methods: &[crate::models::PaymentMethod],
+    ) -> AppResult<CreateExpenseRequest> {
+        let title = required_text(row.title, row_number, "title")?;
+        let amount = parse_amount(&row.amount, row_number)?;
+        let expense_date = parse_csv_date(&row.expense_date, row_number, "expense_date")?;
+        let bill_statement_name = clean_option(row.bill_statement);
+        let category_id = resolve_lookup(
+            clean_option(row.category_id),
+            clean_option(row.category),
+            categories,
+            |category| &category.name,
+            |category| crate::models::record_key_to_string(&category.id.key),
+            row_number,
+            "category",
+        )?;
+        let bill_statement_id = resolve_lookup(
+            clean_option(row.bill_statement_id),
+            bill_statement_name.clone(),
+            bill_statements,
+            |bill_statement| &bill_statement.name,
+            |bill_statement| crate::models::record_key_to_string(&bill_statement.id.key),
+            row_number,
+            "bill_statement",
+        )?;
+        let (payment_method_id, payment_method) = resolve_payment_method_row(
+            clean_option(row.payment_method_id),
+            clean_option(row.payment_method),
+            payment_methods,
+            row_number,
+        )?;
+
+        let recurrence_type = clean_option(row.recurrence_type).and_then(|value| {
+            if value.eq_ignore_ascii_case("none") {
+                None
+            } else {
+                Some(value)
+            }
+        });
+
+        let recurrence_count =
+            parse_optional_u32(row.recurrence_count, row_number, "recurrence_count")?;
+        let recurrence_current =
+            parse_optional_u32(row.recurrence_current, row_number, "recurrence_current")?;
+        let recurrence_end_date = match clean_option(row.recurrence_end_date) {
+            Some(value) => Some(parse_csv_date(&value, row_number, "recurrence_end_date")?),
+            None => None,
+        };
+
+        Ok(CreateExpenseRequest {
+            title,
+            amount,
+            payment_method: Some(payment_method),
+            payment_method_id: Some(payment_method_id),
+            expense_date,
+            description: clean_option(row.description),
+            bill_statement: bill_statement_name,
+            bill_statement_id: Some(bill_statement_id),
+            category_id: Some(category_id),
+            paid_by: clean_option(row.paid_by),
+            recurrence_type,
+            recurrence_type_id: None,
+            recurrence_count,
+            recurrence_current,
+            recurrence_end_date,
+        })
     }
 
     fn format_bill_statement_name(&self, date_str: &str) -> String {

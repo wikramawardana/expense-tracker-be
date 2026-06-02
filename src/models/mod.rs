@@ -16,7 +16,7 @@ pub use expense::{
     BulkCreateExpensesResponse, BulkExpenseAction, BulkExpenseActionRequest,
     BulkExpenseActionResponse, CreateExpenseRequest, CreateExpensesBulkRequest, Expense,
     ExpensePaginationMeta, ExpenseQueryParams, ExpenseResponse, ExpenseStatus,
-    PaginatedExpensesResponse, UpdateExpenseRequest,
+    ImportExpensesCsvResponse, PaginatedExpensesResponse, UpdateExpenseRequest,
 };
 
 pub mod payment_method;

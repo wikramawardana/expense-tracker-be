@@ -54,6 +54,11 @@ pub fn create_router(
         .route("/expenses", get(ExpenseHandler::get_all))
         .route("/expenses/bulk", post(ExpenseHandler::create_bulk))
         .route("/expenses/bulk", patch(ExpenseHandler::apply_bulk_action))
+        .route("/expenses/import-csv", post(ExpenseHandler::import_csv))
+        .route(
+            "/expenses/import-template.csv",
+            get(ExpenseHandler::import_template),
+        )
         .route("/expenses/:id", get(ExpenseHandler::get_by_id))
         .route("/expenses/:id", put(ExpenseHandler::update))
         .route("/expenses/:id", delete(ExpenseHandler::delete))

@@ -94,6 +94,12 @@ pub struct BulkCreateExpensesResponse {
     pub count: usize,
 }
 
+#[derive(Debug, Serialize)]
+pub struct ImportExpensesCsvResponse {
+    pub created: Vec<ExpenseResponse>,
+    pub count: usize,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BulkExpenseAction {
