@@ -50,78 +50,40 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  update-gitops:
+  deploy:
     name: Update GitOps
     runs-on: ubuntu-latest
     needs: build
+    environment: production
 
     steps:
-      - name: Update image tag in GitOps repo
-        env:
-          GITOPS_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+      - name: Checkout GitOps
+        uses: actions/checkout@v5
+        with:
+          repository: wikramawardana/wikra-gitops
+          token: ${{ secrets.GITOPS_TOKEN || secrets.GH_PAT }}
+          path: wikra-gitops
+
+      - name: Update backend image tag
+        working-directory: wikra-gitops
         run: |
-          if [ -z "${GITOPS_TOKEN}" ]; then
-            echo "::warning::GITOPS_TOKEN secret is not set – skipping GitOps update"
-            exit 0
-          fi
-          SHORT_SHA="${GITHUB_SHA::7}"
-          git clone https://x-access-token:${GITOPS_TOKEN}@github.com/wikramawardana/wikra-gitops.git
-          cd wikra-gitops
+          set -euo pipefail
+          IMAGE_TAG="${GITHUB_SHA::7}"
+          FILE="manifests/expense-tracker-be/overlays/prod/kustomization.yaml"
+
+          sed -i -E "s/(newTag: ).*/\1${IMAGE_TAG}/" "$FILE"
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          sed -i "s|newTag:.*|newTag: ${SHORT_SHA}|" manifests/expense-tracker-be/overlays/prod/kustomization.yaml
-          git add manifests/expense-tracker-be/overlays/prod/kustomization.yaml
-          git diff --staged --quiet || git commit -m "deploy expense-tracker-be ${SHORT_SHA}"
+          git add "$FILE"
+
+          if git diff --cached --quiet; then
+            echo "GitOps already points at ${IMAGE_TAG}"
+            exit 0
+          fi
+
+          git commit -m "deploy expense backend ${IMAGE_TAG}"
           git push
-
-  deploy:
-    name: Deploy to VPS
-    runs-on: ubuntu-latest
-    needs: build
-    environment: production
-    permissions:
-      contents: read
-      packages: read
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Copy MCP server to VPS
-        uses: appleboy/scp-action@v1
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT }}
-          source: "mcp/server.py,mcp/README.md"
-          target: "/home/wikra/production-projects/expense-tracker"
-          overwrite: true
-
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
-        env:
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GHCR_USER: ${{ github.actor }}
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT }}
-          envs: GHCR_TOKEN,GHCR_USER
-          script: |
-            cd /home/wikra/production-projects
-            echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
-            docker compose pull expense-tracker-api
-            docker compose up -d expense-tracker-api
-            docker image prune -f
-            if [ -f /home/wikra/production-projects/expense-tracker/mcp/server.py ]; then
-              chmod 700 /home/wikra/production-projects/expense-tracker/mcp/server.py
-              /home/wikra/.hermes/hermes-agent/venv/bin/python -m py_compile /home/wikra/production-projects/expense-tracker/mcp/server.py
-              if systemctl --user is-active --quiet hermes-gateway-wikrassist-expense.service; then
-                systemctl --user restart hermes-gateway-wikrassist-expense.service || true
-              fi
-            fi
 
   health-check:
     name: Health Check
@@ -130,7 +92,7 @@ jobs:
 
     steps:
       - name: Wait for startup
-        run: sleep 30
+        run: sleep 60
 
       - name: Check API health
-        run: curl -f https://api-expensetracker.wikra.cloud/api/v1/health || echo "Health check failed"
+        run: curl -fsS https://api-oops.wikra.my.id/api/v1/health
