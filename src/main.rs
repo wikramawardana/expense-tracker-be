@@ -36,7 +36,7 @@ async fn main() {
         .init();
 
     // Load configuration and connect to SurrealDB
-    let cfg = load();
+    let cfg = load().await.expect("Failed to load configuration");
     println!("Connecting to SurrealDB...");
     let db_instance = init_db(&cfg).await;
     println!("SurrealDB Connected!");

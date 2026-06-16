@@ -219,6 +219,11 @@ So the normal flow is:
 | `DATABASE_URL`    | PostgreSQL for auth      | `postgres://...`        |
 | `FRONTEND_URL`    | CORS allowed origin      | `http://localhost:3000` |
 | `RUST_LOG`        | Log level                | `debug`                 |
+| `VAULT_ADDR`      | HashiCorp Vault address  | `http://127.0.0.1:8200` |
+| `VAULT_TOKEN`     | HashiCorp Vault token    | `hvs...`                |
+| `VAULT_SECRET_PATH` | Vault KV v2 secret path | `secret/expense-tracker-be-local` |
+
+When `VAULT_ADDR` and `VAULT_TOKEN` are set, the API loads secrets from Vault KV v2 before reading required config values. The default secret path is `secret/expense-tracker-be-local`. Store keys in Vault using the same names as the environment variables, for example `SURREAL_DB_URL`, `SURREAL_DB_USER`, `SURREAL_DB_PASS`, `SURREAL_DB_NS`, `SURREAL_DB_DB`, and `DATABASE_URL`.
 
 ## Dependencies
 
