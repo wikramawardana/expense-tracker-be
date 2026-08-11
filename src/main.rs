@@ -1,3 +1,4 @@
+mod auth_database;
 mod config;
 mod db;
 mod errors;
@@ -44,6 +45,8 @@ async fn main() {
     // Initialize PostgreSQL connection for session/auth verification
     let database_url =
         std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for session verification");
+    auth_database::require_isolated_auth_database(&database_url, "Expense Tracker API")
+        .expect("Invalid auth database configuration");
 
     println!("Connecting to PostgreSQL for auth...");
     let pg_pool = PgPoolOptions::new()
