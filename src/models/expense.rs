@@ -206,6 +206,7 @@ pub struct ExpenseQueryParams {
     pub expense_date_from: Option<String>,
     pub expense_date_to: Option<String>,
     pub payment_method: Option<String>,
+    pub payment_method_id: Option<String>,
     pub paid_by: Option<String>,
     pub status: Option<String>,
     pub bill_statement_id: Option<String>,
@@ -213,6 +214,55 @@ pub struct ExpenseQueryParams {
     pub sort_by: String,
     #[serde(default = "default_sort_order")]
     pub sort_order: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct ExpenseTotals {
+    pub total_count: u32,
+    pub total_amount: f64,
+    pub paid_amount: f64,
+    pub pending_amount: f64,
+    pub unpaid_amount: f64,
+    pub outstanding_amount: f64,
+    pub completion_rate: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ExpensePaymentMethodSummary {
+    pub payment_method_id: Option<String>,
+    pub name: String,
+    pub method_type: Option<String>,
+    pub totals: ExpenseTotals,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ExpenseMonthSummary {
+    pub bill_statement_id: String,
+    pub name: String,
+    pub statement_date: Option<String>,
+    pub due_date: Option<String>,
+    pub totals: ExpenseTotals,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ExpenseSummaryResponse {
+    pub totals: ExpenseTotals,
+    pub payment_methods: Vec<ExpensePaymentMethodSummary>,
+    pub months: Vec<ExpenseMonthSummary>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ExpenseNavigationMethod {
+    pub payment_method_id: Option<String>,
+    pub name: String,
+    pub method_type: Option<String>,
+    pub totals: ExpenseTotals,
+    pub months: Vec<ExpenseMonthSummary>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ExpenseNavigationResponse {
+    pub methods: Vec<ExpenseNavigationMethod>,
 }
 
 fn default_page() -> u32 {

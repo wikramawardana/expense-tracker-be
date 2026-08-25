@@ -28,6 +28,11 @@ impl ExpenseRepository {
         result.ok_or_else(|| AppError::NotFound(format!("Expense with id {} not found", id)))
     }
 
+    pub async fn find_all(&self) -> AppResult<Vec<Expense>> {
+        let expenses: Vec<Expense> = self.db.select("expenses").await?;
+        Ok(expenses)
+    }
+
     pub async fn find_with_query(&self, query: &ExpenseQueryParams) -> AppResult<Vec<Expense>> {
         let offset = (query.page - 1) * query.page_size;
 
@@ -38,21 +43,37 @@ impl ExpenseRepository {
         // Date range filters
         if let Some(date_from) = &query.expense_date_from {
             conditions.push("expense_date >= $date_from".to_string());
-            bindings.push((
-                "date_from".to_string(),
-                serde_json::json!(date_from),
-            ));
+            bindings.push(("date_from".to_string(), serde_json::json!(date_from)));
         }
         if let Some(date_to) = &query.expense_date_to {
             conditions.push("expense_date <= $date_to".to_string());
-            bindings.push((
-                "date_to".to_string(),
-                serde_json::json!(date_to),
-            ));
+            bindings.push(("date_to".to_string(), serde_json::json!(date_to)));
         }
 
-        // Payment method filter
-        if let Some(payment_method) = &query.payment_method {
+        // Payment method filter. When both values are supplied, the name
+        // fallback keeps historical rows without an ID visible.
+        if let (Some(payment_method_id), Some(payment_method)) =
+            (&query.payment_method_id, &query.payment_method)
+        {
+            conditions.push(
+                "(payment_method_id = $payment_method_id OR payment_method = $payment_method)"
+                    .to_string(),
+            );
+            bindings.push((
+                "payment_method_id".to_string(),
+                serde_json::json!(payment_method_id),
+            ));
+            bindings.push((
+                "payment_method".to_string(),
+                serde_json::json!(payment_method),
+            ));
+        } else if let Some(payment_method_id) = &query.payment_method_id {
+            conditions.push("payment_method_id = $payment_method_id".to_string());
+            bindings.push((
+                "payment_method_id".to_string(),
+                serde_json::json!(payment_method_id),
+            ));
+        } else if let Some(payment_method) = &query.payment_method {
             conditions.push("payment_method = $payment_method".to_string());
             bindings.push((
                 "payment_method".to_string(),
@@ -77,7 +98,10 @@ impl ExpenseRepository {
         // Bill statement filter
         if let Some(bill_statement_id) = &query.bill_statement_id {
             conditions.push("bill_statement_id = $bill_statement_id".to_string());
-            bindings.push(("bill_statement_id".to_string(), serde_json::json!(bill_statement_id)));
+            bindings.push((
+                "bill_statement_id".to_string(),
+                serde_json::json!(bill_statement_id),
+            ));
         }
 
         // Build WHERE clause
@@ -135,19 +159,34 @@ impl ExpenseRepository {
 
         if let Some(date_from) = &query.expense_date_from {
             conditions.push("expense_date >= $date_from".to_string());
-            bindings.push((
-                "date_from".to_string(),
-                serde_json::json!(date_from),
-            ));
+            bindings.push(("date_from".to_string(), serde_json::json!(date_from)));
         }
         if let Some(date_to) = &query.expense_date_to {
             conditions.push("expense_date <= $date_to".to_string());
-            bindings.push((
-                "date_to".to_string(),
-                serde_json::json!(date_to),
-            ));
+            bindings.push(("date_to".to_string(), serde_json::json!(date_to)));
         }
-        if let Some(payment_method) = &query.payment_method {
+        if let (Some(payment_method_id), Some(payment_method)) =
+            (&query.payment_method_id, &query.payment_method)
+        {
+            conditions.push(
+                "(payment_method_id = $payment_method_id OR payment_method = $payment_method)"
+                    .to_string(),
+            );
+            bindings.push((
+                "payment_method_id".to_string(),
+                serde_json::json!(payment_method_id),
+            ));
+            bindings.push((
+                "payment_method".to_string(),
+                serde_json::json!(payment_method),
+            ));
+        } else if let Some(payment_method_id) = &query.payment_method_id {
+            conditions.push("payment_method_id = $payment_method_id".to_string());
+            bindings.push((
+                "payment_method_id".to_string(),
+                serde_json::json!(payment_method_id),
+            ));
+        } else if let Some(payment_method) = &query.payment_method {
             conditions.push("payment_method = $payment_method".to_string());
             bindings.push((
                 "payment_method".to_string(),
@@ -168,7 +207,10 @@ impl ExpenseRepository {
         // Bill statement filter
         if let Some(bill_statement_id) = &query.bill_statement_id {
             conditions.push("bill_statement_id = $bill_statement_id".to_string());
-            bindings.push(("bill_statement_id".to_string(), serde_json::json!(bill_statement_id)));
+            bindings.push((
+                "bill_statement_id".to_string(),
+                serde_json::json!(bill_statement_id),
+            ));
         }
 
         let where_clause = if conditions.is_empty() {
@@ -213,7 +255,11 @@ impl ExpenseRepository {
     }
 
     /// Delete all expenses in a recurrence group except the specified one
-    pub async fn delete_by_recurrence_group_id_except(&self, group_id: &str, except_id: &str) -> AppResult<u32> {
+    pub async fn delete_by_recurrence_group_id_except(
+        &self,
+        group_id: &str,
+        except_id: &str,
+    ) -> AppResult<u32> {
         let sql = "DELETE FROM expenses WHERE recurrence_group_id = $group_id AND id != $except_id";
         let mut result = self
             .db
@@ -221,7 +267,7 @@ impl ExpenseRepository {
             .bind(("group_id", group_id.to_string()))
             .bind(("except_id", format!("expenses:{}", except_id)))
             .await?;
-        
+
         // Get the count of deleted records
         let deleted: Vec<Expense> = result.take(0).unwrap_or_default();
         Ok(deleted.len() as u32)

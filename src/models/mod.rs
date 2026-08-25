@@ -15,8 +15,10 @@ pub mod expense;
 pub use expense::{
     BulkCreateExpensesResponse, BulkExpenseAction, BulkExpenseActionRequest,
     BulkExpenseActionResponse, CreateExpenseRequest, CreateExpensesBulkRequest, Expense,
-    ExpensePaginationMeta, ExpenseQueryParams, ExpenseResponse, ExpenseStatus,
-    ImportExpensesCsvResponse, PaginatedExpensesResponse, UpdateExpenseRequest,
+    ExpenseMonthSummary, ExpenseNavigationMethod, ExpenseNavigationResponse, ExpensePaginationMeta,
+    ExpensePaymentMethodSummary, ExpenseQueryParams, ExpenseResponse, ExpenseStatus,
+    ExpenseSummaryResponse, ExpenseTotals, ImportExpensesCsvResponse, PaginatedExpensesResponse,
+    UpdateExpenseRequest,
 };
 
 pub mod payment_method;

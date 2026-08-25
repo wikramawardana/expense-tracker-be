@@ -52,6 +52,8 @@ pub fn create_router(
     let protected_expense_routes = Router::new()
         .route("/expenses", post(ExpenseHandler::create))
         .route("/expenses", get(ExpenseHandler::get_all))
+        .route("/expenses/summary", get(ExpenseHandler::get_summary))
+        .route("/expenses/navigation", get(ExpenseHandler::get_navigation))
         .route("/expenses/bulk", post(ExpenseHandler::create_bulk))
         .route("/expenses/bulk", patch(ExpenseHandler::apply_bulk_action))
         .route("/expenses/import-csv", post(ExpenseHandler::import_csv))

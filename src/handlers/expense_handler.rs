@@ -10,8 +10,9 @@ use crate::db::Database;
 use crate::errors::{AppError, AppResult};
 use crate::models::{
     ApiResponse, BulkCreateExpensesResponse, BulkExpenseActionRequest, CreateExpenseRequest,
-    CreateExpensesBulkRequest, ExpenseQueryParams, ExpenseResponse, ImportExpensesCsvResponse,
-    PaginatedExpensesResponse, UpdateExpenseRequest,
+    CreateExpensesBulkRequest, ExpenseNavigationResponse, ExpenseQueryParams, ExpenseResponse,
+    ExpenseSummaryResponse, ImportExpensesCsvResponse, PaginatedExpensesResponse,
+    UpdateExpenseRequest,
 };
 use crate::repositories::{
     BillStatementRepository, CategoryRepository, ExpenseRepository, PaymentMethodRepository,
@@ -157,6 +158,27 @@ impl ExpenseHandler {
         Ok(ApiResponse::success(
             paginated_response,
             "Expenses retrieved successfully",
+        ))
+    }
+
+    /// Get backend-calculated totals and breakdowns for a filtered expense scope.
+    pub async fn get_summary(
+        State(handler): State<Self>,
+        Query(query): Query<ExpenseQueryParams>,
+    ) -> AppResult<impl IntoResponse> {
+        let response: ExpenseSummaryResponse = handler.service.get_summary(query).await?;
+        Ok(ApiResponse::success(
+            response,
+            "Expense summary retrieved successfully",
+        ))
+    }
+
+    /// Get payment-method and bill-statement facets for nested navigation.
+    pub async fn get_navigation(State(handler): State<Self>) -> AppResult<impl IntoResponse> {
+        let response: ExpenseNavigationResponse = handler.service.get_navigation().await?;
+        Ok(ApiResponse::success(
+            response,
+            "Expense navigation retrieved successfully",
         ))
     }
 

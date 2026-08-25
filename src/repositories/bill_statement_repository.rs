@@ -28,7 +28,7 @@ impl BillStatementRepository {
     }
 
     pub async fn find_all(&self) -> AppResult<Vec<BillStatement>> {
-        let sql = "SELECT * FROM bill_statements ORDER BY name ASC";
+        let sql = "SELECT * FROM bill_statements ORDER BY statement_date DESC, name DESC";
         let mut result = self.db.query(sql).await?;
         let items: Vec<BillStatement> = result.take(0)?;
         Ok(items)
