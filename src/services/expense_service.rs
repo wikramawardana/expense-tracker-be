@@ -1,4 +1,4 @@
-use chrono::{DateTime, Datelike, Months, Utc};
+use chrono::{DateTime, Datelike, Months, NaiveDate, Utc};
 use serde::Deserialize;
 use std::collections::HashMap;
 use surrealdb::types::RecordId;
@@ -332,6 +332,20 @@ fn add_months_to_date_str(date_str: &str, months: u32) -> String {
     }
 }
 
+fn bill_statement_sort_value(statement: &BillStatement) -> i64 {
+    if let Some(statement_date) = statement.statement_date.as_deref() {
+        if let Some(date) = parse_date(statement_date) {
+            return date.timestamp();
+        }
+    }
+
+    NaiveDate::parse_from_str(&format!("1 {}", statement.name), "%d %B %Y")
+        .ok()
+        .and_then(|date| date.and_hms_opt(0, 0, 0))
+        .map(|date| date.and_utc().timestamp())
+        .unwrap_or(i64::MAX)
+}
+
 #[derive(Clone)]
 pub struct ExpenseService {
     repository: ExpenseRepository,
@@ -617,6 +631,71 @@ impl ExpenseService {
                                 // Also advance the expense_date by 1 month
                                 expense.expense_date =
                                     add_months_to_date_str(&expense.expense_date, 1);
+                            }
+                        }
+                    }
+
+                    expense.updated_at = now.clone();
+                    updated.push(ExpenseResponse::from(
+                        self.repository.update(id, expense).await?,
+                    ));
+                }
+
+                Ok(BulkExpenseActionResponse {
+                    count: updated.len(),
+                    updated,
+                    deleted_count: 0,
+                })
+            }
+            BulkExpenseAction::MoveNextBillStatement => {
+                let mut bill_statements = self.bill_statement_repository.find_all().await?;
+                bill_statements.retain(|statement| statement.is_active);
+                bill_statements.sort_by_key(bill_statement_sort_value);
+                let now = Utc::now().to_rfc3339();
+                let mut updated = Vec::with_capacity(expense_ids.len());
+
+                for (id, mut expense) in expense_ids.iter().zip(expenses.into_iter()) {
+                    let current_index = expense.bill_statement_id.as_ref().and_then(|current_id| {
+                        bill_statements.iter().position(|statement| {
+                            crate::models::record_key_to_string(&statement.id.key) == *current_id
+                        })
+                    });
+                    let next_statement =
+                        current_index.and_then(|index| bill_statements.get(index + 1).cloned());
+
+                    let target = if let Some(statement) = next_statement {
+                        statement
+                    } else {
+                        let base_date = current_index
+                            .and_then(|index| bill_statements.get(index))
+                            .and_then(|statement| statement.statement_date.as_deref())
+                            .unwrap_or(&expense.expense_date);
+                        let next_date = add_months_to_date_str(base_date, 1);
+                        let next_id = self.get_or_create_bill_statement(&next_date).await?;
+                        let statement = self.bill_statement_repository.find_by_id(&next_id).await?;
+                        if !bill_statements.iter().any(|existing| {
+                            crate::models::record_key_to_string(&existing.id.key) == next_id
+                        }) {
+                            bill_statements.push(statement.clone());
+                            bill_statements.sort_by_key(bill_statement_sort_value);
+                        }
+                        statement
+                    };
+
+                    expense.bill_statement_id =
+                        Some(crate::models::record_key_to_string(&target.id.key));
+                    expense.bill_statement = Some(target.name);
+                    expense.expense_date = add_months_to_date_str(&expense.expense_date, 1);
+
+                    if expense
+                        .recurrence_type
+                        .as_deref()
+                        .is_some_and(|value| value.eq_ignore_ascii_case("installment"))
+                    {
+                        if let Some(current) = expense.recurrence_current {
+                            let max = expense.recurrence_count.unwrap_or(u32::MAX);
+                            if current < max {
+                                expense.recurrence_current = Some(current + 1);
                             }
                         }
                     }

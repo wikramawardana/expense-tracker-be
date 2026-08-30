@@ -104,6 +104,7 @@ pub struct ImportExpensesCsvResponse {
 #[serde(rename_all = "snake_case")]
 pub enum BulkExpenseAction {
     MoveBillStatement,
+    MoveNextBillStatement,
     SetStatus,
     Delete,
 }
