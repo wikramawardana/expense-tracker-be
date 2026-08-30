@@ -125,6 +125,26 @@ fn matches_expense(expense: &Expense, query: &ExpenseQueryParams) -> bool {
         return false;
     }
 
+    if let Some(expense_type) = query.expense_type.as_deref() {
+        let recurrence_type = expense
+            .recurrence_type
+            .as_deref()
+            .unwrap_or("none")
+            .trim()
+            .to_lowercase();
+        let matches_type = match expense_type.trim().to_lowercase().as_str() {
+            "transaction" | "regular" | "none" => {
+                recurrence_type.is_empty() || recurrence_type == "none"
+            }
+            "installment" => recurrence_type == "installment",
+            "subscription" => recurrence_type == "subscription",
+            _ => true,
+        };
+        if !matches_type {
+            return false;
+        }
+    }
+
     true
 }
 
@@ -930,8 +950,15 @@ impl ExpenseService {
         })
     }
 
-    pub async fn get_navigation(&self) -> AppResult<ExpenseNavigationResponse> {
+    pub async fn get_navigation(
+        &self,
+        query: ExpenseQueryParams,
+    ) -> AppResult<ExpenseNavigationResponse> {
         let expenses = self.repository.find_all().await?;
+        let expenses: Vec<Expense> = expenses
+            .into_iter()
+            .filter(|expense| matches_expense(expense, &query))
+            .collect();
         let payment_methods = self.payment_method_repository.find_all().await?;
         let bill_statements = self.bill_statement_repository.find_all().await?;
 
@@ -970,10 +997,7 @@ impl ExpenseService {
                 })
                 .collect();
 
-        let mut method_groups: HashMap<String, Vec<&Expense>> = method_meta_by_key
-            .keys()
-            .map(|key| (key.clone(), Vec::new()))
-            .collect();
+        let mut method_groups: HashMap<String, Vec<&Expense>> = HashMap::new();
         for expense in &expenses {
             let key = expense
                 .payment_method_id
@@ -1132,6 +1156,14 @@ impl ExpenseService {
                     expense.recurrence_count,
                     expense.recurrence_current,
                 )?;
+            } else if expense
+                .recurrence_type
+                .as_deref()
+                .is_some_and(|value| value.eq_ignore_ascii_case("subscription"))
+            {
+                expense.recurrence_count = None;
+                expense.recurrence_current = None;
+                expense.recurrence_group_id = None;
             }
         }
 
@@ -1210,8 +1242,12 @@ impl ExpenseService {
             return Ok(true);
         }
 
+        if lower == "subscription" {
+            return Ok(false);
+        }
+
         Err(AppError::Validation(
-            "Only Installment schedule type is supported".to_string(),
+            "Only Installment and Subscription schedule types are supported".to_string(),
         ))
     }
 

@@ -210,6 +210,9 @@ pub struct ExpenseQueryParams {
     pub paid_by: Option<String>,
     pub status: Option<String>,
     pub bill_statement_id: Option<String>,
+    /// Logical expense bucket used by the UI navigation.
+    /// Supported values: transaction, installment, subscription.
+    pub expense_type: Option<String>,
     #[serde(default = "default_sort_by")]
     pub sort_by: String,
     #[serde(default = "default_sort_order")]

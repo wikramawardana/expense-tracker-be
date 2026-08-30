@@ -104,6 +104,25 @@ impl ExpenseRepository {
             ));
         }
 
+        // Keep regular transactions, installments, and subscriptions in the
+        // same table while allowing the product areas to query them separately.
+        if let Some(expense_type) = query.expense_type.as_deref() {
+            match expense_type.trim().to_lowercase().as_str() {
+                "transaction" | "regular" | "none" => conditions.push(
+                    "(recurrence_type = NONE OR recurrence_type = NULL OR recurrence_type = '' OR recurrence_type = 'none')"
+                        .to_string(),
+                ),
+                "installment" | "subscription" => {
+                    conditions.push("recurrence_type = $expense_type".to_string());
+                    bindings.push((
+                        "expense_type".to_string(),
+                        serde_json::json!(expense_type.trim().to_lowercase()),
+                    ));
+                }
+                _ => {}
+            }
+        }
+
         // Build WHERE clause
         let where_clause = if conditions.is_empty() {
             String::new()
@@ -211,6 +230,23 @@ impl ExpenseRepository {
                 "bill_statement_id".to_string(),
                 serde_json::json!(bill_statement_id),
             ));
+        }
+
+        if let Some(expense_type) = query.expense_type.as_deref() {
+            match expense_type.trim().to_lowercase().as_str() {
+                "transaction" | "regular" | "none" => conditions.push(
+                    "(recurrence_type = NONE OR recurrence_type = NULL OR recurrence_type = '' OR recurrence_type = 'none')"
+                        .to_string(),
+                ),
+                "installment" | "subscription" => {
+                    conditions.push("recurrence_type = $expense_type".to_string());
+                    bindings.push((
+                        "expense_type".to_string(),
+                        serde_json::json!(expense_type.trim().to_lowercase()),
+                    ));
+                }
+                _ => {}
+            }
         }
 
         let where_clause = if conditions.is_empty() {

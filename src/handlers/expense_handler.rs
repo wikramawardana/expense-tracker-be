@@ -174,8 +174,11 @@ impl ExpenseHandler {
     }
 
     /// Get payment-method and bill-statement facets for nested navigation.
-    pub async fn get_navigation(State(handler): State<Self>) -> AppResult<impl IntoResponse> {
-        let response: ExpenseNavigationResponse = handler.service.get_navigation().await?;
+    pub async fn get_navigation(
+        State(handler): State<Self>,
+        Query(query): Query<ExpenseQueryParams>,
+    ) -> AppResult<impl IntoResponse> {
+        let response: ExpenseNavigationResponse = handler.service.get_navigation(query).await?;
         Ok(ApiResponse::success(
             response,
             "Expense navigation retrieved successfully",
