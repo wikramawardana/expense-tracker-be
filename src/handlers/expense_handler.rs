@@ -8,6 +8,7 @@ use axum_extra::extract::Multipart;
 
 use crate::db::Database;
 use crate::errors::{AppError, AppResult};
+use crate::middleware::CurrentUser;
 use crate::models::{
     ApiResponse, BulkCreateExpensesResponse, BulkExpenseActionRequest, CreateExpenseRequest,
     CreateExpensesBulkRequest, ExpenseNavigationResponse, ExpenseQueryParams, ExpenseResponse,
@@ -42,9 +43,10 @@ impl ExpenseHandler {
     /// Create a new expense
     pub async fn create(
         State(handler): State<Self>,
+        CurrentUser(user): CurrentUser,
         Json(request): Json<CreateExpenseRequest>,
     ) -> AppResult<impl IntoResponse> {
-        let expense = handler.service.create(request).await?;
+        let expense = handler.service.create(request, &user.id).await?;
         let response = ExpenseResponse::from(expense);
         Ok((
             StatusCode::CREATED,
@@ -55,9 +57,10 @@ impl ExpenseHandler {
     /// Create multiple expenses in a single request
     pub async fn create_bulk(
         State(handler): State<Self>,
+        CurrentUser(user): CurrentUser,
         Json(request): Json<CreateExpensesBulkRequest>,
     ) -> AppResult<impl IntoResponse> {
-        let expenses = handler.service.create_bulk(request).await?;
+        let expenses = handler.service.create_bulk(request, &user.id).await?;
         let created: Vec<ExpenseResponse> =
             expenses.into_iter().map(ExpenseResponse::from).collect();
         let count = created.len();
@@ -74,6 +77,7 @@ impl ExpenseHandler {
     /// Import expenses from a CSV file
     pub async fn import_csv(
         State(handler): State<Self>,
+        CurrentUser(user): CurrentUser,
         mut multipart: Multipart,
     ) -> AppResult<impl IntoResponse> {
         let mut file_bytes = None;
@@ -97,7 +101,7 @@ impl ExpenseHandler {
         let bytes = file_bytes.ok_or_else(|| {
             AppError::Validation("CSV upload must include a file field".to_string())
         })?;
-        let expenses = handler.service.import_csv(&bytes).await?;
+        let expenses = handler.service.import_csv(&bytes, &user.id).await?;
         let created: Vec<ExpenseResponse> =
             expenses.into_iter().map(ExpenseResponse::from).collect();
         let count = created.len();
@@ -127,9 +131,10 @@ impl ExpenseHandler {
     /// Apply one action to multiple expenses
     pub async fn apply_bulk_action(
         State(handler): State<Self>,
+        CurrentUser(user): CurrentUser,
         Json(request): Json<BulkExpenseActionRequest>,
     ) -> AppResult<impl IntoResponse> {
-        let response = handler.service.apply_bulk_action(request).await?;
+        let response = handler.service.apply_bulk_action(request, &user.id).await?;
         Ok(ApiResponse::success(
             response,
             "Bulk expense action completed successfully",
@@ -139,9 +144,10 @@ impl ExpenseHandler {
     /// Get a single expense by ID
     pub async fn get_by_id(
         State(handler): State<Self>,
+        CurrentUser(user): CurrentUser,
         Path(id): Path<String>,
     ) -> AppResult<impl IntoResponse> {
-        let expense = handler.service.get_by_id(&id).await?;
+        let expense = handler.service.get_by_id(&id, &user.id).await?;
         let response = ExpenseResponse::from(expense);
         Ok(ApiResponse::success(
             response,
@@ -152,9 +158,11 @@ impl ExpenseHandler {
     /// Get all expenses with pagination and filters
     pub async fn get_all(
         State(handler): State<Self>,
+        CurrentUser(user): CurrentUser,
         Query(query): Query<ExpenseQueryParams>,
     ) -> AppResult<impl IntoResponse> {
-        let paginated_response: PaginatedExpensesResponse = handler.service.get_all(query).await?;
+        let paginated_response: PaginatedExpensesResponse =
+            handler.service.get_all(query, &user.id).await?;
         Ok(ApiResponse::success(
             paginated_response,
             "Expenses retrieved successfully",
@@ -164,9 +172,10 @@ impl ExpenseHandler {
     /// Get backend-calculated totals and breakdowns for a filtered expense scope.
     pub async fn get_summary(
         State(handler): State<Self>,
+        CurrentUser(user): CurrentUser,
         Query(query): Query<ExpenseQueryParams>,
     ) -> AppResult<impl IntoResponse> {
-        let response: ExpenseSummaryResponse = handler.service.get_summary(query).await?;
+        let response: ExpenseSummaryResponse = handler.service.get_summary(query, &user.id).await?;
         Ok(ApiResponse::success(
             response,
             "Expense summary retrieved successfully",
@@ -176,9 +185,11 @@ impl ExpenseHandler {
     /// Get payment-method and bill-statement facets for nested navigation.
     pub async fn get_navigation(
         State(handler): State<Self>,
+        CurrentUser(user): CurrentUser,
         Query(query): Query<ExpenseQueryParams>,
     ) -> AppResult<impl IntoResponse> {
-        let response: ExpenseNavigationResponse = handler.service.get_navigation(query).await?;
+        let response: ExpenseNavigationResponse =
+            handler.service.get_navigation(query, &user.id).await?;
         Ok(ApiResponse::success(
             response,
             "Expense navigation retrieved successfully",
@@ -188,10 +199,11 @@ impl ExpenseHandler {
     /// Update an expense
     pub async fn update(
         State(handler): State<Self>,
+        CurrentUser(user): CurrentUser,
         Path(id): Path<String>,
         Json(request): Json<UpdateExpenseRequest>,
     ) -> AppResult<impl IntoResponse> {
-        let expense = handler.service.update(&id, request).await?;
+        let expense = handler.service.update(&id, request, &user.id).await?;
         let response = ExpenseResponse::from(expense);
         Ok(ApiResponse::success(
             response,
@@ -202,9 +214,10 @@ impl ExpenseHandler {
     /// Delete an expense
     pub async fn delete(
         State(handler): State<Self>,
+        CurrentUser(user): CurrentUser,
         Path(id): Path<String>,
     ) -> AppResult<impl IntoResponse> {
-        handler.service.delete(&id).await?;
+        handler.service.delete(&id, &user.id).await?;
         Ok(ApiResponse::<()>::success_msg(
             "Expense deleted successfully",
         ))

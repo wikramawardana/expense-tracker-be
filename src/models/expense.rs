@@ -42,6 +42,7 @@ impl std::str::FromStr for ExpenseStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, SurrealValue)]
 pub struct Expense {
     pub id: RecordId,
+    pub owner_id: String,
     pub title: String,
     pub amount: f64,
     pub payment_method: String,
@@ -150,6 +151,7 @@ pub struct UpdateExpenseRequest {
 #[derive(Debug, Serialize)]
 pub struct ExpenseResponse {
     pub id: String,
+    pub owner_id: String,
     pub title: String,
     pub amount: f64,
     pub payment_method: String,
@@ -175,6 +177,7 @@ impl From<Expense> for ExpenseResponse {
     fn from(expense: Expense) -> Self {
         ExpenseResponse {
             id: crate::models::record_key_to_string(&expense.id.key),
+            owner_id: expense.owner_id,
             title: expense.title,
             amount: expense.amount,
             payment_method: expense.payment_method,

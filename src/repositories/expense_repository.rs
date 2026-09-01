@@ -23,22 +23,41 @@ impl ExpenseRepository {
         created.ok_or_else(|| AppError::Internal("Failed to create expense".to_string()))
     }
 
-    pub async fn find_by_id(&self, id: &str) -> AppResult<Expense> {
-        let result: Option<Expense> = self.db.select(("expenses", id)).await?;
+    pub async fn find_by_id(&self, id: &str, owner_id: &str) -> AppResult<Expense> {
+        let sql = "SELECT * FROM expenses WHERE id = type::record('expenses', $id) AND owner_id = $owner_id LIMIT 1";
+        let mut result = self
+            .db
+            .query(sql)
+            .bind(("id", id.to_string()))
+            .bind(("owner_id", owner_id.to_string()))
+            .await?;
+        let rows: Vec<Expense> = result.take(0)?;
+        let result = rows.into_iter().next();
         result.ok_or_else(|| AppError::NotFound(format!("Expense with id {} not found", id)))
     }
 
-    pub async fn find_all(&self) -> AppResult<Vec<Expense>> {
-        let expenses: Vec<Expense> = self.db.select("expenses").await?;
+    pub async fn find_all(&self, owner_id: &str) -> AppResult<Vec<Expense>> {
+        let mut result = self
+            .db
+            .query("SELECT * FROM expenses WHERE owner_id = $owner_id")
+            .bind(("owner_id", owner_id.to_string()))
+            .await?;
+        let expenses: Vec<Expense> = result.take(0)?;
         Ok(expenses)
     }
 
-    pub async fn find_with_query(&self, query: &ExpenseQueryParams) -> AppResult<Vec<Expense>> {
+    pub async fn find_with_query(
+        &self,
+        query: &ExpenseQueryParams,
+        owner_id: &str,
+    ) -> AppResult<Vec<Expense>> {
         let offset = (query.page - 1) * query.page_size;
 
         // Build dynamic query with filters
         let mut conditions: Vec<String> = vec![];
         let mut bindings: Vec<(String, serde_json::Value)> = vec![];
+        conditions.push("owner_id = $owner_id".to_string());
+        bindings.push(("owner_id".to_string(), serde_json::json!(owner_id)));
 
         // Date range filters
         if let Some(date_from) = &query.expense_date_from {
@@ -171,10 +190,16 @@ impl ExpenseRepository {
         Ok(expenses)
     }
 
-    pub async fn count_with_query(&self, query: &ExpenseQueryParams) -> AppResult<u32> {
+    pub async fn count_with_query(
+        &self,
+        query: &ExpenseQueryParams,
+        owner_id: &str,
+    ) -> AppResult<u32> {
         // Build dynamic query with filters (same as find_with_query)
         let mut conditions: Vec<String> = vec![];
         let mut bindings: Vec<(String, serde_json::Value)> = vec![];
+        conditions.push("owner_id = $owner_id".to_string());
+        bindings.push(("owner_id".to_string(), serde_json::json!(owner_id)));
 
         if let Some(date_from) = &query.expense_date_from {
             conditions.push("expense_date >= $date_from".to_string());
@@ -274,13 +299,15 @@ impl ExpenseRepository {
         Ok(count_result.map(|c| c.count).unwrap_or(0))
     }
 
-    pub async fn update(&self, id: &str, expense: Expense) -> AppResult<Expense> {
-        let updated: Option<Expense> = self.db.update(("expenses", id)).content(expense).await?;
+    pub async fn update(&self, id: &str, owner_id: &str, expense: Expense) -> AppResult<Expense> {
+        let existing = self.find_by_id(id, owner_id).await?;
+        let updated: Option<Expense> = self.db.update(existing.id).content(expense).await?;
         updated.ok_or_else(|| AppError::NotFound(format!("Expense with id {} not found", id)))
     }
 
-    pub async fn delete(&self, id: &str) -> AppResult<()> {
-        let deleted: Option<Expense> = self.db.delete(("expenses", id)).await?;
+    pub async fn delete(&self, id: &str, owner_id: &str) -> AppResult<()> {
+        let existing = self.find_by_id(id, owner_id).await?;
+        let deleted: Option<Expense> = self.db.delete(existing.id).await?;
         match deleted {
             Some(_) => Ok(()),
             None => Err(AppError::NotFound(format!(
@@ -295,12 +322,14 @@ impl ExpenseRepository {
         &self,
         group_id: &str,
         except_id: &str,
+        owner_id: &str,
     ) -> AppResult<u32> {
-        let sql = "DELETE FROM expenses WHERE recurrence_group_id = $group_id AND id != $except_id";
+        let sql = "DELETE FROM expenses WHERE recurrence_group_id = $group_id AND owner_id = $owner_id AND id != $except_id";
         let mut result = self
             .db
             .query(sql)
             .bind(("group_id", group_id.to_string()))
+            .bind(("owner_id", owner_id.to_string()))
             .bind(("except_id", format!("expenses:{}", except_id)))
             .await?;
 
@@ -310,12 +339,17 @@ impl ExpenseRepository {
     }
 
     /// Get the latest expense date in a recurrence group
-    pub async fn get_latest_expense_in_group(&self, group_id: &str) -> AppResult<Option<Expense>> {
-        let sql = "SELECT * FROM expenses WHERE recurrence_group_id = $group_id ORDER BY expense_date DESC LIMIT 1";
+    pub async fn get_latest_expense_in_group(
+        &self,
+        group_id: &str,
+        owner_id: &str,
+    ) -> AppResult<Option<Expense>> {
+        let sql = "SELECT * FROM expenses WHERE recurrence_group_id = $group_id AND owner_id = $owner_id ORDER BY expense_date DESC LIMIT 1";
         let mut result = self
             .db
             .query(sql)
             .bind(("group_id", group_id.to_string()))
+            .bind(("owner_id", owner_id.to_string()))
             .await?;
         let expenses: Vec<Expense> = result.take(0)?;
         Ok(expenses.into_iter().next())

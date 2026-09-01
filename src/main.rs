@@ -56,6 +56,43 @@ async fn main() {
         .expect("Failed to connect to PostgreSQL");
     println!("PostgreSQL connected for auth verification");
 
+    // Assign pre-isolation expenses to the configured legacy owner. If the
+    // deployment has only one account, that account is safe to infer.
+    let legacy_owner_id = if let Ok(email) = std::env::var("EXPENSE_LEGACY_OWNER_EMAIL") {
+        sqlx::query_scalar::<_, String>(r#"SELECT id FROM "user" WHERE email = $1 LIMIT 1"#)
+            .bind(email)
+            .fetch_optional(&pg_pool)
+            .await
+            .expect("Failed to resolve EXPENSE_LEGACY_OWNER_EMAIL")
+    } else {
+        let user_count: i64 = sqlx::query_scalar(r#"SELECT COUNT(*) FROM "user""#)
+            .fetch_one(&pg_pool)
+            .await
+            .expect("Failed to count auth users");
+        if user_count == 1 {
+            sqlx::query_scalar::<_, String>(r#"SELECT id FROM "user" LIMIT 1"#)
+                .fetch_optional(&pg_pool)
+                .await
+                .expect("Failed to resolve the sole auth user")
+        } else {
+            None
+        }
+    };
+
+    if let Some(owner_id) = legacy_owner_id {
+        db_instance
+            .query(
+                "UPDATE expenses SET owner_id = $owner_id WHERE owner_id = NONE OR owner_id = NULL",
+            )
+            .bind(("owner_id", owner_id))
+            .await
+            .expect("Failed to migrate legacy expenses to an owner");
+    } else {
+        tracing::warn!(
+            "Legacy expenses have no owner_id and were left hidden; set EXPENSE_LEGACY_OWNER_EMAIL once to migrate them"
+        );
+    }
+
     // Ensure the api_key table exists alongside the better-auth session/user tables.
     ApiKeyService::init_schema(&pg_pool)
         .await

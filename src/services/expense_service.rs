@@ -369,7 +369,11 @@ impl ExpenseService {
         }
     }
 
-    pub async fn create(&self, request: CreateExpenseRequest) -> AppResult<Expense> {
+    pub async fn create(
+        &self,
+        request: CreateExpenseRequest,
+        owner_id: &str,
+    ) -> AppResult<Expense> {
         request
             .validate()
             .map_err(|e| AppError::Validation(e.to_string()))?;
@@ -429,6 +433,7 @@ impl ExpenseService {
 
         let first_expense = Expense {
             id: RecordId::new("expenses", Uuid::new_v4().to_string()),
+            owner_id: owner_id.to_string(),
             title: request.title.clone(),
             amount: request.amount,
             payment_method: payment_method_name.clone(),
@@ -470,6 +475,7 @@ impl ExpenseService {
 
                 let future_expense = Expense {
                     id: RecordId::new("expenses", Uuid::new_v4().to_string()),
+                    owner_id: owner_id.to_string(),
                     title: request.title.clone(),
                     amount: request.amount,
                     payment_method: payment_method_name.clone(),
@@ -498,7 +504,11 @@ impl ExpenseService {
         Ok(created_first)
     }
 
-    pub async fn create_bulk(&self, request: CreateExpensesBulkRequest) -> AppResult<Vec<Expense>> {
+    pub async fn create_bulk(
+        &self,
+        request: CreateExpensesBulkRequest,
+        owner_id: &str,
+    ) -> AppResult<Vec<Expense>> {
         if request.expenses.is_empty() {
             return Err(AppError::Validation(
                 "At least one expense is required".to_string(),
@@ -507,7 +517,7 @@ impl ExpenseService {
 
         let mut created: Vec<Expense> = Vec::with_capacity(request.expenses.len());
         for (idx, item) in request.expenses.into_iter().enumerate() {
-            let expense = self.create(item).await.map_err(|e| match e {
+            let expense = self.create(item, owner_id).await.map_err(|e| match e {
                 AppError::Validation(msg) => {
                     AppError::Validation(format!("Expense #{}: {}", idx + 1, msg))
                 }
@@ -519,7 +529,7 @@ impl ExpenseService {
         Ok(created)
     }
 
-    pub async fn import_csv(&self, bytes: &[u8]) -> AppResult<Vec<Expense>> {
+    pub async fn import_csv(&self, bytes: &[u8], owner_id: &str) -> AppResult<Vec<Expense>> {
         if bytes.is_empty() {
             return Err(AppError::Validation("CSV file cannot be empty".to_string()));
         }
@@ -554,25 +564,26 @@ impl ExpenseService {
             ));
         }
 
-        self.create_bulk(CreateExpensesBulkRequest { expenses: requests })
+        self.create_bulk(CreateExpensesBulkRequest { expenses: requests }, owner_id)
             .await
     }
 
     pub async fn apply_bulk_action(
         &self,
         request: BulkExpenseActionRequest,
+        owner_id: &str,
     ) -> AppResult<BulkExpenseActionResponse> {
         let expense_ids = self.normalize_bulk_expense_ids(request.expense_ids)?;
 
         let mut expenses = Vec::with_capacity(expense_ids.len());
         for id in &expense_ids {
-            expenses.push(self.repository.find_by_id(id).await?);
+            expenses.push(self.repository.find_by_id(id, owner_id).await?);
         }
 
         match request.action {
             BulkExpenseAction::Delete => {
                 for id in &expense_ids {
-                    self.repository.delete(id).await?;
+                    self.repository.delete(id, owner_id).await?;
                 }
 
                 Ok(BulkExpenseActionResponse {
@@ -592,7 +603,7 @@ impl ExpenseService {
                     expense.status = status.clone();
                     expense.updated_at = now.clone();
                     updated.push(ExpenseResponse::from(
-                        self.repository.update(id, expense).await?,
+                        self.repository.update(id, owner_id, expense).await?,
                     ));
                 }
 
@@ -637,7 +648,7 @@ impl ExpenseService {
 
                     expense.updated_at = now.clone();
                     updated.push(ExpenseResponse::from(
-                        self.repository.update(id, expense).await?,
+                        self.repository.update(id, owner_id, expense).await?,
                     ));
                 }
 
@@ -702,7 +713,7 @@ impl ExpenseService {
 
                     expense.updated_at = now.clone();
                     updated.push(ExpenseResponse::from(
-                        self.repository.update(id, expense).await?,
+                        self.repository.update(id, owner_id, expense).await?,
                     ));
                 }
 
@@ -927,13 +938,17 @@ impl ExpenseService {
         }
     }
 
-    pub async fn get_by_id(&self, id: &str) -> AppResult<Expense> {
-        self.repository.find_by_id(id).await
+    pub async fn get_by_id(&self, id: &str, owner_id: &str) -> AppResult<Expense> {
+        self.repository.find_by_id(id, owner_id).await
     }
 
-    pub async fn get_all(&self, query: ExpenseQueryParams) -> AppResult<PaginatedExpensesResponse> {
-        let expenses = self.repository.find_with_query(&query).await?;
-        let total_items = self.repository.count_with_query(&query).await?;
+    pub async fn get_all(
+        &self,
+        query: ExpenseQueryParams,
+        owner_id: &str,
+    ) -> AppResult<PaginatedExpensesResponse> {
+        let expenses = self.repository.find_with_query(&query, owner_id).await?;
+        let total_items = self.repository.count_with_query(&query, owner_id).await?;
 
         let total_pages = if total_items == 0 {
             0
@@ -958,8 +973,9 @@ impl ExpenseService {
     pub async fn get_summary(
         &self,
         query: ExpenseQueryParams,
+        owner_id: &str,
     ) -> AppResult<ExpenseSummaryResponse> {
-        let all_expenses = self.repository.find_all().await?;
+        let all_expenses = self.repository.find_all(owner_id).await?;
         let payment_methods = self.payment_method_repository.find_all().await?;
         let bill_statements = self.bill_statement_repository.find_all().await?;
 
@@ -1019,8 +1035,7 @@ impl ExpenseService {
                 .then_with(|| a.name.cmp(&b.name))
         });
 
-        let all_refs: Vec<&Expense> = all_expenses.iter().collect();
-        let months = Self::build_month_summaries(&all_refs, &statement_meta);
+        let months = Self::build_month_summaries(&filtered, &statement_meta);
 
         Ok(ExpenseSummaryResponse {
             totals: expense_totals(&filtered),
@@ -1032,8 +1047,9 @@ impl ExpenseService {
     pub async fn get_navigation(
         &self,
         query: ExpenseQueryParams,
+        owner_id: &str,
     ) -> AppResult<ExpenseNavigationResponse> {
-        let expenses = self.repository.find_all().await?;
+        let expenses = self.repository.find_all(owner_id).await?;
         let expenses: Vec<Expense> = expenses
             .into_iter()
             .filter(|expense| matches_expense(expense, &query))
@@ -1156,8 +1172,13 @@ impl ExpenseService {
         months
     }
 
-    pub async fn update(&self, id: &str, request: UpdateExpenseRequest) -> AppResult<Expense> {
-        let mut expense = self.repository.find_by_id(id).await?;
+    pub async fn update(
+        &self,
+        id: &str,
+        request: UpdateExpenseRequest,
+        owner_id: &str,
+    ) -> AppResult<Expense> {
+        let mut expense = self.repository.find_by_id(id, owner_id).await?;
         let old_recurrence_type = expense.recurrence_type.clone();
         let old_recurrence_end_date = expense.recurrence_end_date.clone();
         let old_recurrence_group_id = expense.recurrence_group_id.clone();
@@ -1256,7 +1277,7 @@ impl ExpenseService {
             if let Some(ref group_id) = old_recurrence_group_id {
                 let _ = self
                     .repository
-                    .delete_by_recurrence_group_id_except(group_id, id)
+                    .delete_by_recurrence_group_id_except(group_id, id, owner_id)
                     .await;
             }
             expense.recurrence_type = Some("none".to_string());
@@ -1277,11 +1298,11 @@ impl ExpenseService {
                     expense.recurrence_group_id = Some(Uuid::new_v4().to_string());
                     expense.recurrence_current = Some(1);
                 }
-                self.extend_recurring_expenses(&expense).await?;
+                self.extend_recurring_expenses(&expense, owner_id).await?;
             }
         }
 
-        self.repository.update(id, expense).await
+        self.repository.update(id, owner_id, expense).await
     }
 
     fn is_changing_to_one_time(
@@ -1368,7 +1389,7 @@ impl ExpenseService {
         false
     }
 
-    async fn extend_recurring_expenses(&self, expense: &Expense) -> AppResult<()> {
+    async fn extend_recurring_expenses(&self, expense: &Expense, owner_id: &str) -> AppResult<()> {
         let Some(ref group_id) = expense.recurrence_group_id else {
             return Ok(());
         };
@@ -1379,7 +1400,7 @@ impl ExpenseService {
 
         let latest = self
             .repository
-            .get_latest_expense_in_group(group_id)
+            .get_latest_expense_in_group(group_id, owner_id)
             .await?;
         let (mut current_date_str, mut current_num) = if let Some(latest_expense) = latest {
             (
@@ -1413,6 +1434,7 @@ impl ExpenseService {
 
             let new_expense = Expense {
                 id: RecordId::new("expenses", Uuid::new_v4().to_string()),
+                owner_id: owner_id.to_string(),
                 title: expense.title.clone(),
                 amount: expense.amount,
                 payment_method: expense.payment_method.clone(),
@@ -1440,7 +1462,7 @@ impl ExpenseService {
         Ok(())
     }
 
-    pub async fn delete(&self, id: &str) -> AppResult<()> {
-        self.repository.delete(id).await
+    pub async fn delete(&self, id: &str, owner_id: &str) -> AppResult<()> {
+        self.repository.delete(id, owner_id).await
     }
 }
