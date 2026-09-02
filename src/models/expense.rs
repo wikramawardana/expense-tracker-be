@@ -214,6 +214,9 @@ pub struct ExpenseQueryParams {
     pub paid_by: Option<String>,
     pub status: Option<String>,
     pub bill_statement_id: Option<String>,
+    pub category_id: Option<String>,
+    pub category: Option<String>,
+    pub search: Option<String>,
     /// Logical expense bucket used by the UI navigation.
     /// Supported values: transaction, installment, subscription.
     pub expense_type: Option<String>,
@@ -297,4 +300,26 @@ pub struct ExpensePaginationMeta {
     pub page_size: u32,
     pub total_items: u32,
     pub total_pages: u32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn test_expense_status_from_str() {
+        assert_eq!(ExpenseStatus::from_str("unpaid").unwrap(), ExpenseStatus::Unpaid);
+        assert_eq!(ExpenseStatus::from_str("UNPAID").unwrap(), ExpenseStatus::Unpaid);
+        assert_eq!(ExpenseStatus::from_str("pending").unwrap(), ExpenseStatus::Pending);
+        assert_eq!(ExpenseStatus::from_str("paid").unwrap(), ExpenseStatus::Paid);
+        assert!(ExpenseStatus::from_str("invalid").is_err());
+    }
+
+    #[test]
+    fn test_expense_status_to_string() {
+        assert_eq!(ExpenseStatus::Unpaid.to_string(), "unpaid");
+        assert_eq!(ExpenseStatus::Pending.to_string(), "pending");
+        assert_eq!(ExpenseStatus::Paid.to_string(), "paid");
+    }
 }

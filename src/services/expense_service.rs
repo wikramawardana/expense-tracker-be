@@ -73,56 +73,98 @@ fn expense_totals(expenses: &[&Expense]) -> ExpenseTotals {
 }
 
 fn matches_expense(expense: &Expense, query: &ExpenseQueryParams) -> bool {
-    if query
-        .expense_date_from
-        .as_ref()
-        .is_some_and(|from| expense.expense_date < *from)
-    {
-        return false;
+    if let Some(date_from) = query.expense_date_from.as_deref() {
+        let trimmed = date_from.trim();
+        if !trimmed.is_empty() && expense.expense_date.as_str() < trimmed {
+            return false;
+        }
     }
-    if query
-        .expense_date_to
-        .as_ref()
-        .is_some_and(|to| expense.expense_date > *to)
-    {
-        return false;
+    if let Some(date_to) = query.expense_date_to.as_deref() {
+        let trimmed = date_to.trim();
+        if !trimmed.is_empty() && expense.expense_date.as_str() > trimmed {
+            return false;
+        }
     }
 
     let method_matches = match (&query.payment_method_id, &query.payment_method) {
         (Some(id), Some(name)) => {
-            expense.payment_method_id.as_deref() == Some(id.as_str())
-                || expense.payment_method == *name
+            let id_trimmed = id.trim();
+            let name_trimmed = name.trim();
+            if id_trimmed.is_empty() || id_trimmed == "all" || name_trimmed.is_empty() || name_trimmed == "all" {
+                true
+            } else {
+                expense.payment_method_id.as_deref() == Some(id_trimmed)
+                    || expense.payment_method.eq_ignore_ascii_case(name_trimmed)
+            }
         }
-        (Some(id), None) => expense.payment_method_id.as_deref() == Some(id.as_str()),
-        (None, Some(name)) => expense.payment_method == *name,
+        (Some(id), None) => {
+            let id_trimmed = id.trim();
+            id_trimmed.is_empty()
+                || id_trimmed == "all"
+                || expense.payment_method_id.as_deref() == Some(id_trimmed)
+        }
+        (None, Some(name)) => {
+            let name_trimmed = name.trim();
+            name_trimmed.is_empty()
+                || name_trimmed == "all"
+                || expense.payment_method.eq_ignore_ascii_case(name_trimmed)
+        }
         (None, None) => true,
     };
     if !method_matches {
         return false;
     }
 
-    if query
-        .paid_by
-        .as_ref()
-        .is_some_and(|paid_by| expense.paid_by.as_deref() != Some(paid_by.as_str()))
-    {
-        return false;
+    if let Some(paid_by) = query.paid_by.as_deref() {
+        let trimmed = paid_by.trim();
+        if !trimmed.is_empty() && trimmed != "all" && expense.paid_by.as_deref() != Some(trimmed) {
+            return false;
+        }
     }
-    if query
-        .status
-        .as_ref()
-        .is_some_and(|status| expense.status.to_string() != status.to_lowercase())
-    {
-        return false;
+    if let Some(status) = query.status.as_deref() {
+        let trimmed = status.trim().to_lowercase();
+        if !trimmed.is_empty() && trimmed != "all" && expense.status.to_string() != trimmed {
+            return false;
+        }
     }
-    if query
-        .bill_statement_id
-        .as_ref()
-        .is_some_and(|statement_id| {
-            expense.bill_statement_id.as_deref() != Some(statement_id.as_str())
-        })
-    {
-        return false;
+    if let Some(statement_id) = query.bill_statement_id.as_deref() {
+        let trimmed = statement_id.trim();
+        if !trimmed.is_empty()
+            && trimmed != "all"
+            && expense.bill_statement_id.as_deref() != Some(trimmed)
+        {
+            return false;
+        }
+    }
+    if let Some(category_id) = query.category_id.as_deref() {
+        let trimmed = category_id.trim();
+        if !trimmed.is_empty()
+            && trimmed != "all"
+            && expense.category_id.as_deref() != Some(trimmed)
+        {
+            return false;
+        }
+    } else if let Some(category) = query.category.as_deref() {
+        let trimmed = category.trim();
+        if !trimmed.is_empty()
+            && trimmed != "all"
+            && expense.category_id.as_deref() != Some(trimmed)
+        {
+            return false;
+        }
+    }
+    if let Some(search) = query.search.as_deref() {
+        let trimmed = search.trim().to_lowercase();
+        if !trimmed.is_empty() {
+            let title_matches = expense.title.to_lowercase().contains(&trimmed);
+            let desc_matches = expense
+                .description
+                .as_deref()
+                .is_some_and(|d| d.to_lowercase().contains(&trimmed));
+            if !title_matches && !desc_matches {
+                return false;
+            }
+        }
     }
 
     if let Some(expense_type) = query.expense_type.as_deref() {
