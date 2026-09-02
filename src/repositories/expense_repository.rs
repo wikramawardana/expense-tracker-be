@@ -41,7 +41,7 @@ fn build_query_conditions(
         let method_trimmed = payment_method.trim();
         if !id_trimmed.is_empty() && id_trimmed != "all" && !method_trimmed.is_empty() && method_trimmed != "all" {
             conditions.push(
-                "(payment_method_id = $payment_method_id OR string::lowercase(payment_method) = $payment_method)"
+                "(payment_method_id = $payment_method_id OR (payment_method != NONE AND payment_method != NULL AND string::lowercase(payment_method) = $payment_method))"
                     .to_string(),
             );
             bindings.push((
@@ -59,7 +59,7 @@ fn build_query_conditions(
                 serde_json::json!(id_trimmed),
             ));
         } else if !method_trimmed.is_empty() && method_trimmed != "all" {
-            conditions.push("string::lowercase(payment_method) = $payment_method".to_string());
+            conditions.push("(payment_method != NONE AND payment_method != NULL AND string::lowercase(payment_method) = $payment_method)".to_string());
             bindings.push((
                 "payment_method".to_string(),
                 serde_json::json!(method_trimmed.to_lowercase()),
@@ -77,7 +77,7 @@ fn build_query_conditions(
     } else if let Some(payment_method) = &query.payment_method {
         let trimmed = payment_method.trim();
         if !trimmed.is_empty() && trimmed != "all" {
-            conditions.push("string::lowercase(payment_method) = $payment_method".to_string());
+            conditions.push("(payment_method != NONE AND payment_method != NULL AND string::lowercase(payment_method) = $payment_method)".to_string());
             bindings.push((
                 "payment_method".to_string(),
                 serde_json::json!(trimmed.to_lowercase()),
@@ -89,7 +89,7 @@ fn build_query_conditions(
     if let Some(paid_by) = &query.paid_by {
         let trimmed = paid_by.trim();
         if !trimmed.is_empty() && trimmed != "all" {
-            conditions.push("string::lowercase(paid_by) = $paid_by".to_string());
+            conditions.push("(paid_by != NONE AND paid_by != NULL AND string::lowercase(paid_by) = $paid_by)".to_string());
             bindings.push(("paid_by".to_string(), serde_json::json!(trimmed.to_lowercase())));
         }
     }
@@ -98,7 +98,7 @@ fn build_query_conditions(
     if let Some(status) = &query.status {
         let trimmed = status.trim().to_lowercase();
         if !trimmed.is_empty() && trimmed != "all" {
-            conditions.push("string::lowercase(status) = $status".to_string());
+            conditions.push("(status != NONE AND status != NULL AND string::lowercase(status) = $status)".to_string());
             bindings.push(("status".to_string(), serde_json::json!(trimmed)));
         }
     }
@@ -125,7 +125,7 @@ fn build_query_conditions(
     } else if let Some(category) = &query.category {
         let trimmed = category.trim();
         if !trimmed.is_empty() && trimmed != "all" {
-            conditions.push("(category_id = $category OR string::lowercase(category) = $category)".to_string());
+            conditions.push("(category_id = $category OR (category != NONE AND category != NULL AND string::lowercase(category) = $category))".to_string());
             bindings.push(("category".to_string(), serde_json::json!(trimmed.to_lowercase())));
         }
     }
@@ -135,7 +135,7 @@ fn build_query_conditions(
         let trimmed = search.trim();
         if !trimmed.is_empty() {
             conditions.push(
-                "(string::lowercase(title) CONTAINS $search OR (description != NONE AND description != NULL AND string::lowercase(description) CONTAINS $search))".to_string(),
+                "((title != NONE AND title != NULL AND string::lowercase(title) CONTAINS $search) OR (description != NONE AND description != NULL AND string::lowercase(description) CONTAINS $search))".to_string(),
             );
             bindings.push(("search".to_string(), serde_json::json!(trimmed.to_lowercase())));
         }
@@ -146,14 +146,14 @@ fn build_query_conditions(
     if let Some(expense_type) = query.expense_type.as_deref() {
         match expense_type.trim().to_lowercase().as_str() {
             "transaction" | "regular" | "none" => conditions.push(
-                "(recurrence_type = NONE OR recurrence_type = NULL OR recurrence_type = '' OR string::lowercase(recurrence_type) = 'none')"
+                "(recurrence_type = NONE OR recurrence_type = NULL OR recurrence_type = '' OR (recurrence_type != NONE AND recurrence_type != NULL AND string::lowercase(recurrence_type) = 'none'))"
                     .to_string(),
             ),
             "installment" => {
-                conditions.push("string::lowercase(recurrence_type) = 'installment'".to_string());
+                conditions.push("(recurrence_type != NONE AND recurrence_type != NULL AND string::lowercase(recurrence_type) = 'installment')".to_string());
             }
             "subscription" => {
-                conditions.push("string::lowercase(recurrence_type) = 'subscription'".to_string());
+                conditions.push("(recurrence_type != NONE AND recurrence_type != NULL AND string::lowercase(recurrence_type) = 'subscription')".to_string());
             }
             _ => {}
         }
