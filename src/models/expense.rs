@@ -3,13 +3,16 @@ use surrealdb::types::RecordId;
 use surrealdb::types::SurrealValue;
 use validator::Validate;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, SurrealValue)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, SurrealValue)]
 #[serde(rename_all = "lowercase")]
 #[surreal(untagged)]
 pub enum ExpenseStatus {
     #[default]
+    #[serde(alias = "Pending", alias = "PENDING")]
     Pending,
+    #[serde(alias = "Unpaid", alias = "UNPAID")]
     Unpaid,
+    #[serde(alias = "Paid", alias = "PAID")]
     Paid,
 }
 

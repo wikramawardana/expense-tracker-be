@@ -117,13 +117,22 @@ fn matches_expense(expense: &Expense, query: &ExpenseQueryParams) -> bool {
 
     if let Some(paid_by) = query.paid_by.as_deref() {
         let trimmed = paid_by.trim();
-        if !trimmed.is_empty() && trimmed != "all" && expense.paid_by.as_deref() != Some(trimmed) {
+        if !trimmed.is_empty()
+            && trimmed != "all"
+            && !expense
+                .paid_by
+                .as_deref()
+                .is_some_and(|p| p.eq_ignore_ascii_case(trimmed))
+        {
             return false;
         }
     }
     if let Some(status) = query.status.as_deref() {
         let trimmed = status.trim().to_lowercase();
-        if !trimmed.is_empty() && trimmed != "all" && expense.status.to_string() != trimmed {
+        if !trimmed.is_empty()
+            && trimmed != "all"
+            && expense.status.to_string().to_lowercase() != trimmed
+        {
             return false;
         }
     }
