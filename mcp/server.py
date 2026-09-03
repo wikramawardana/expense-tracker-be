@@ -1123,17 +1123,114 @@ def sync_bank_expenses(
                 if res.get("ok"):
                     ingested_records.append(res["data"]["expense"])
 
+        # Build full summary for today so LLM does NOT need to run any code or additional queries
+        today_expenses_res = get_expenses_today()
+        today_list = today_expenses_res.get("data", {}).get("expenses", []) if today_expenses_res.get("ok") else []
+        
+        ctx_res = list_expense_context()
+        categories_map = {}
+        if ctx_res.get("ok"):
+            for c in ctx_res.get("data", {}).get("categories", []):
+                categories_map[c["id"]] = c["name"]
+
+        category_summary = {}
+        pm_summary = {}
+        total_amount = 0.0
+
+        for exp in today_list:
+            amt = float(exp.get("amount", 0))
+            c_name = categories_map.get(exp.get("category_id"), "General")
+            pm = exp.get("payment_method", "Other")
+            total_amount += amt
+            category_summary[c_name] = category_summary.get(c_name, 0.0) + amt
+            pm_summary[pm] = pm_summary.get(pm, 0.0) + amt
+
+        summary_data = {
+            "date": today_str,
+            "total_idr": total_amount,
+            "category_breakdown": [{"category": k, "amount": v} for k, v in sorted(category_summary.items(), key=lambda x: -x[1])],
+            "payment_method_breakdown": [{"payment_method": k, "amount": v} for k, v in sorted(pm_summary.items(), key=lambda x: -x[1])],
+            "all_expenses_today": [
+                {
+                    "title": e.get("title"),
+                    "amount": e.get("amount"),
+                    "category": categories_map.get(e.get("category_id"), "General"),
+                    "payment_method": e.get("payment_method"),
+                    "description": e.get("description"),
+                }
+                for e in today_list
+            ],
+        }
+
         return ok({
+            "status": "success",
+            "message": f"Synced {len(new_txs)} new transactions ({skipped_count} skipped duplicates).",
             "query_dates": sorted(list(target_dates)) if target_dates else "all",
             "found_total": len(parsed_txs),
             "new_count": len(new_txs),
             "skipped_duplicates": skipped_count,
             "dry_run": dry_run,
             "ingested_count": len(ingested_records) if not dry_run else 0,
-            "transactions": new_txs,
+            "today_summary": summary_data,
         })
     except Exception as exc:
         return fail(exc)
+
+
+@mcp.tool()
+def get_today_summary(date_query: str = "today") -> dict[str, Any]:
+    """Get the complete expense summary and category breakdown for today or a specific date.
+    Use this to get summary tables without querying the database directly.
+    """
+    try:
+        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        if date_query and date_query.lower() == "yesterday":
+            target_date = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+        elif date_query and date_query.lower() not in ["today", "all"]:
+            target_date = date_query
+        else:
+            target_date = today_str
+
+        exp_res = list_expenses(expense_date_from=target_date, expense_date_to=target_date, limit=100)
+        exp_list = exp_res.get("data", {}).get("expenses", []) if exp_res.get("ok") else []
+
+        ctx_res = list_expense_context()
+        categories_map = {}
+        if ctx_res.get("ok"):
+            for c in ctx_res.get("data", {}).get("categories", []):
+                categories_map[c["id"]] = c["name"]
+
+        category_summary = {}
+        pm_summary = {}
+        total_amount = 0.0
+
+        for exp in exp_list:
+            amt = float(exp.get("amount", 0))
+            c_name = categories_map.get(exp.get("category_id"), "General")
+            pm = exp.get("payment_method", "Other")
+            total_amount += amt
+            category_summary[c_name] = category_summary.get(c_name, 0.0) + amt
+            pm_summary[pm] = pm_summary.get(pm, 0.0) + amt
+
+        return ok({
+            "date": target_date,
+            "total_idr": total_amount,
+            "category_breakdown": [{"category": k, "amount": v} for k, v in sorted(category_summary.items(), key=lambda x: -x[1])],
+            "payment_method_breakdown": [{"payment_method": k, "amount": v} for k, v in sorted(pm_summary.items(), key=lambda x: -x[1])],
+            "expenses": [
+                {
+                    "title": e.get("title"),
+                    "amount": e.get("amount"),
+                    "category": categories_map.get(e.get("category_id"), "General"),
+                    "payment_method": e.get("payment_method"),
+                    "description": e.get("description"),
+                }
+                for e in exp_list
+            ],
+        })
+    except Exception as exc:
+        return fail(exc)
+
 
 
 
