@@ -140,6 +140,9 @@ pub fn create_router(
         .route("/bot/expenses", post(ExpenseHandler::create))
         .route("/bot/expenses", get(ExpenseHandler::get_all))
         .route("/bot/expenses/bulk", post(ExpenseHandler::create_bulk))
+        .route("/bot/expenses/:id", put(ExpenseHandler::update))
+        .route("/bot/expenses/:id", patch(ExpenseHandler::update))
+        .route("/bot/expenses/:id", delete(ExpenseHandler::delete))
         .with_state(expense_handler)
         .layer(middleware::from_fn_with_state(
             bot_auth_state.clone(),
