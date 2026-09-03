@@ -2,9 +2,14 @@ from __future__ import annotations
 
 import base64
 import calendar
+import email
+from email.header import decode_header
+from html.parser import HTMLParser
+import imaplib
 import json
 import os
 import re
+import ssl
 import sys
 import uuid
 from datetime import date, datetime, timedelta, timezone
@@ -812,6 +817,264 @@ def create_expense(
         )
     except Exception as exc:
         return fail(exc)
+
+
+class HTMLTextExtractor(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.result = []
+
+    def handle_data(self, d):
+        self.result.append(d)
+
+    def get_text(self):
+        raw = " ".join(self.result)
+        raw = raw.replace("\xa0", " ")
+        return re.sub(r"\s+", " ", raw)
+
+
+def _parse_idr(raw_str: str) -> float | None:
+    if not raw_str:
+        return None
+    cleaned = re.sub(r"[^\d,\.]", "", raw_str).strip()
+    if not cleaned:
+        return None
+    if "," in cleaned and "." in cleaned:
+        cleaned = cleaned.split(",")[0].replace(".", "")
+    elif "," in cleaned:
+        cleaned = cleaned.split(",")[0]
+    else:
+        cleaned = cleaned.replace(".", "")
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
+
+
+def _match_category_name(title: str, merchant: str) -> str:
+    combined = f"{title} {merchant}".lower()
+    if any(k in combined for k in ["grab", "gojek", "bluebird", "taxi", "parkir", "toll"]):
+        return "Transportation"
+    if any(k in combined for k in ["shopee", "tokopedia", "lazada", "uniqlo", "zara", "blibli"]):
+        return "Shopping"
+    if any(k in combined for k in ["makan", "warung", "resto", "kopi", "cafe", "coffee", "starbucks", "indomaret", "idm", "alfamart", "pimart", "ucok"]):
+        return "Food & Dining"
+    return "Shopping"
+
+
+@mcp.tool()
+def sync_bank_expenses(
+    date_query: str = "today",
+    bank: str = "all",
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Sync transaction notification emails from BCA, BNI, and Mandiri from Gmail into SpendCTRL expenses.
+    Supports date_query='today', 'yesterday', 'YYYY-MM-DD', or 'all'.
+    """
+    try:
+        user = os.getenv("GMAIL_BANK_USER")
+        password = (os.getenv("GMAIL_BANK_APP_PASSWORD") or "").replace(" ", "")
+
+        if not user or not password:
+            raise ToolError("Missing GMAIL_BANK_USER or GMAIL_BANK_APP_PASSWORD in environment")
+
+        # Resolve target dates
+        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        if not date_query or date_query.lower() == "today":
+            target_dates = {today_str}
+        elif date_query.lower() == "yesterday":
+            target_dates = {(datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")}
+        elif date_query.lower() in ["all", "any"]:
+            target_dates = set()
+        else:
+            try:
+                dt = datetime.strptime(date_query, "%Y-%m-%d")
+                target_dates = {dt.strftime("%Y-%m-%d")}
+            except ValueError:
+                target_dates = {today_str}
+
+        try:
+            import certifi
+            ctx = ssl.create_default_context(cafile=certifi.where())
+        except ImportError:
+            ctx = ssl._create_unverified_context()
+
+        mail = imaplib.IMAP4_SSL("imap.gmail.com", 993, ssl_context=ctx)
+        mail.login(user, password)
+        mail.select("INBOX", readonly=True)
+
+        if bank == "bca":
+            query = '(FROM "KartuKreditBCA@klikbca.com" SUBJECT "Credit Card Transaction Notification")'
+        elif bank == "bni":
+            query = '(FROM "bnicreditcard@bni.co.id")'
+        elif bank == "mandiri":
+            query = '(FROM "mandiri")'
+        else:
+            query = '(OR (FROM "KartuKreditBCA@klikbca.com") (OR (FROM "bnicreditcard@bni.co.id") (FROM "mandiri")))'
+
+        status, msg_nums = mail.search(None, query)
+        if status != "OK" or not msg_nums[0]:
+            return ok({"found_total": 0, "new_count": 0, "skipped_duplicates": 0, "ingested": []})
+
+        msg_ids = msg_nums[0].split()
+        parsed_txs = []
+
+        for msg_id in msg_ids[-30:]:
+            _, msg_data = mail.fetch(msg_id, "(RFC822)")
+            for part in msg_data:
+                if isinstance(part, tuple):
+                    msg = email.message_from_bytes(part[1])
+                    body_text = ""
+                    for sub in msg.walk():
+                        ctype = sub.get_content_type()
+                        if ctype == "text/html":
+                            payload = sub.get_payload(decode=True)
+                            if payload:
+                                parser = HTMLTextExtractor()
+                                parser.feed(payload.decode("utf-8", errors="ignore"))
+                                body_text = parser.get_text()
+                                break
+                        elif ctype == "text/plain" and not body_text:
+                            payload = sub.get_payload(decode=True)
+                            if payload:
+                                body_text = payload.decode("utf-8", errors="ignore")
+
+                    # Parse BCA
+                    if "Pemegang Kartu Kredit BCA" in body_text or "KartuKreditBCA" in body_text:
+                        card_m = re.search(r"Nomor Kartu\s*:\s*([0-9Xx]+)", body_text, re.I)
+                        merch_m = re.search(r"Merchant\s*/\s*ATM\s*:\s*([^:]+?)(?=\s*Jenis Transaksi|\s*Otentikasi|\s*Pada Tanggal|$)", body_text, re.I)
+                        date_m = re.search(r"Pada Tanggal\s*:\s*([0-9]{2}-[0-9]{2}-[0-9]{4}\s+[0-9]{2}:[0-9]{2}:[0-9]{2})", body_text, re.I)
+                        amt_m = re.search(r"Sejumlah\s*:\s*(Rp\s*[0-9\.,]+)", body_text, re.I)
+                        if amt_m and date_m:
+                            amt = _parse_idr(amt_m.group(1))
+                            try:
+                                exp_date = datetime.strptime(date_m.group(1).strip(), "%d-%m-%Y %H:%M:%S").strftime("%Y-%m-%d")
+                            except Exception:
+                                exp_date = today_str
+                            merch = merch_m.group(1).strip() if merch_m else "BCA Transaction"
+                            title = "Grab" if merch.upper().startswith("GRAB") else ("Shopee" if "SHOPEE" in merch.upper() else merch)
+                            last4 = card_m.group(1)[-4:] if card_m else "3888"
+                            if amt and (not target_dates or exp_date in target_dates):
+                                parsed_txs.append({
+                                    "bank": "BCA",
+                                    "title": title,
+                                    "amount": amt,
+                                    "expense_date": exp_date,
+                                    "payment_method": "BCA Krisflyer",
+                                    "category": _match_category_name(title, merch),
+                                    "description": f"BCA Credit Card (..{last4}) at {merch}",
+                                    "paid_by": "wikra",
+                                })
+
+                    # Parse BNI
+                    elif "Kartu Kredit BNI" in body_text or "bnicreditcard" in body_text:
+                        merch_m = re.search(r"Nama Merchant\s*:\s*([^:]+?)(?=\s*Nominal Transaksi|\s*Tanggal Transaksi|$)", body_text, re.I)
+                        amt_m = re.search(r"Nominal Transaksi\s*:\s*(Rp\s*[0-9\.,]+)", body_text, re.I)
+                        date_m = re.search(r"Tanggal Transaksi\s*:\s*([0-9]{2}/[0-9]{2}/[0-9]{4}\s+[0-9]{2}:[0-9]{2})", body_text, re.I)
+                        card_m = re.search(r"Nomor Kartu Kredit BNI\s*:\s*([A-Za-z0-9Xx]+)", body_text, re.I)
+                        if amt_m and date_m:
+                            amt = _parse_idr(amt_m.group(1))
+                            try:
+                                exp_date = datetime.strptime(date_m.group(1).strip(), "%d/%m/%Y %H:%M").strftime("%Y-%m-%d")
+                            except Exception:
+                                exp_date = today_str
+                            merch = merch_m.group(1).strip() if merch_m else "BNI Transaction"
+                            title = merch[5:].strip() if merch.startswith("QRIS-") else merch
+                            card = card_m.group(1) if card_m else "BNI"
+                            if amt and (not target_dates or exp_date in target_dates):
+                                parsed_txs.append({
+                                    "bank": "BNI",
+                                    "title": title,
+                                    "amount": amt,
+                                    "expense_date": exp_date,
+                                    "payment_method": "BNI Mastercard World",
+                                    "category": _match_category_name(title, merch),
+                                    "description": f"BNI Credit Card ({card}) at {merch}",
+                                    "paid_by": "wikra",
+                                })
+
+                    # Parse Mandiri
+                    elif "mandiri" in body_text.lower() or "livin" in body_text.lower():
+                        penerima_m = re.search(r"Penerima\s*([^:]+?)(?=\s*Jakarta|\s*Tanggal|$)", body_text, re.I)
+                        amt_m = re.search(r"Nominal Transaksi\s*(?:Rp\s*[0-9\.,]+)", body_text, re.I)
+                        ref_m = re.search(r"No\.\s*Referensi\s*([0-9A-Za-z]+)", body_text, re.I)
+                        sumber_m = re.search(r"Sumber Dana\s*([^:]+?)(?=\s*Simpan Bukti|$)", body_text, re.I)
+                        date_m = re.search(r"Tanggal\s*([0-9]{1,2}\s+[A-Za-z]{3}\s+[0-9]{4})", body_text, re.I)
+                        if amt_m:
+                            amt = _parse_idr(amt_m.group(0).replace("Nominal Transaksi", ""))
+                            exp_date = today_str
+                            if date_m:
+                                try:
+                                    exp_date = datetime.strptime(date_m.group(1).strip(), "%d %b %Y").strftime("%Y-%m-%d")
+                                except Exception:
+                                    pass
+                            merch = penerima_m.group(1).strip() if penerima_m else "Mandiri Transaction"
+                            title = "Indomaret" if "IDM QRIS" in merch or "INDOMARET" in merch.upper() else merch
+                            sumber = sumber_m.group(1).strip() if sumber_m else "Mandiri"
+                            ref_no = ref_m.group(1).strip() if ref_m else ""
+                            if amt and (not target_dates or exp_date in target_dates):
+                                parsed_txs.append({
+                                    "bank": "Mandiri",
+                                    "title": title,
+                                    "amount": amt,
+                                    "expense_date": exp_date,
+                                    "payment_method": "Mandiri Marriot Bonvoy" if "Marriott" in sumber else sumber,
+                                    "category": _match_category_name(title, merch),
+                                    "description": f"{sumber} at {merch} (Ref: {ref_no})",
+                                    "paid_by": "wikra",
+                                })
+
+        mail.logout()
+
+        # Query existing expenses in SurrealDB to deduplicate
+        existing_rows = surreal_query("SELECT expense_date, amount, title FROM expenses;")
+        existing_keys = set()
+        if existing_rows and isinstance(existing_rows[0], list):
+            for row in existing_rows[0]:
+                ed = str(row.get("expense_date", ""))[:10]
+                am = int(float(row.get("amount", 0)))
+                ti = str(row.get("title", "")).lower().strip()[:10]
+                existing_keys.add(f"{ed}:{am}:{ti}")
+
+        new_txs = []
+        skipped_count = 0
+        for tx in parsed_txs:
+            k = f"{tx['expense_date'][:10]}:{int(tx['amount'])}:{tx['title'].lower().strip()[:10]}"
+            if k in existing_keys:
+                skipped_count += 1
+            else:
+                new_txs.append(tx)
+                existing_keys.add(k)  # prevent duplicate within same batch
+
+        ingested_records = []
+        if not dry_run:
+            for tx in new_txs:
+                res = create_expense(
+                    title=tx["title"],
+                    amount=tx["amount"],
+                    expense_date=tx["expense_date"],
+                    payment_method=tx["payment_method"],
+                    category=tx["category"],
+                    description=tx["description"],
+                    paid_by=tx["paid_by"],
+                    status="pending",
+                    auto_create_bill_statement=True,
+                )
+                if res.get("ok"):
+                    ingested_records.append(res["data"]["expense"])
+
+        return ok({
+            "query_dates": sorted(list(target_dates)) if target_dates else "all",
+            "found_total": len(parsed_txs),
+            "new_count": len(new_txs),
+            "skipped_duplicates": skipped_count,
+            "dry_run": dry_run,
+            "ingested_count": len(ingested_records) if not dry_run else 0,
+            "transactions": new_txs,
+        })
+    except Exception as exc:
+        return fail(exc)
+
 
 
 def self_test() -> None:
