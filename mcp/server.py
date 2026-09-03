@@ -23,6 +23,8 @@ from mcp.server.fastmcp import FastMCP
 DEFAULT_ENV_FILE = "/home/wikra/production-projects/expense-tracker/.env.backend"
 DEFAULT_SURREAL_HTTP_URL = "http://127.0.0.1:8001/sql"
 DEFAULT_TIMEZONE = "Asia/Jakarta"
+DEFAULT_OWNER_ID = "AatkLFL4lb6ogZzx1Q4X5We04Icwmuz0"
+
 
 TABLES = {
     "categories": "categories",
@@ -782,9 +784,11 @@ def create_expense(
         )
 
         created_at = now_iso()
+        owner_id = os.getenv("EXPENSE_OWNER_ID", DEFAULT_OWNER_ID)
         expense = create_record(
             "expenses",
             {
+                "owner_id": owner_id,
                 "title": title,
                 "amount": float(amount),
                 "payment_method": payment_record["name"],
