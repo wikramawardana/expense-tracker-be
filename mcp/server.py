@@ -855,6 +855,59 @@ def _parse_idr(raw_str: str) -> float | None:
         return None
 
 
+KNOWN_BRANDS = {
+    "grab": "Grab",
+    "grabfood": "GrabFood",
+    "shopee": "Shopee",
+    "indomart": "Indomaret",
+    "indomaret": "Indomaret",
+    "pimart": "PIMArt",
+    "ucok wr": "Ucok WR",
+    "macbook m5": "MacBook M5",
+    "ipad": "iPad",
+    "iphone 17 pro max": "iPhone 17 Pro Max",
+    "casing iphone 17 pro max": "Casing iPhone 17 Pro Max",
+    "youtube premium": "YouTube Premium",
+    "github copilot": "GitHub Copilot",
+    "icloud": "iCloud",
+    "capcut": "CapCut",
+    "biznet": "Biznet",
+    "hostinger": "Hostinger",
+    "fithub": "FitHub",
+    "ps5": "PS5",
+    "tas fjalraven": "Tas Fjällräven",
+    "spp ruby": "SPP Ruby",
+    "pelunasan mobil xl7": "Pelunasan Mobil XL7",
+    "pajak stargazer": "Pajak Stargazer",
+    "pajak kedelai": "Pajak Kedelai",
+    "booking fee familia urban": "Booking Fee Familia Urban",
+    "motor alva one": "Motor ALVA One",
+    "card to cash": "Card to Cash",
+    "powercash": "Power Cash",
+    "kasbon kepin": "Kasbon Kepin",
+    "kasbon teteh": "Kasbon Teteh",
+    "sekolah ruby": "Sekolah Ruby",
+    "warung makan": "Warung Makan",
+    "warung": "Warung",
+    "pasar": "Pasar",
+    "hotel phuket": "Hotel Phuket",
+    "phuket trip": "Phuket Trip",
+    "sofa": "Sofa",
+    "rumah": "Rumah",
+    "motor": "Motor",
+    "embah": "Embah",
+    "birkenstock": "Birkenstock",
+}
+
+
+def normalize_title(title: str) -> str:
+    cleaned = title.strip()
+    low = cleaned.lower()
+    if low in KNOWN_BRANDS:
+        return KNOWN_BRANDS[low]
+    return " ".join(word.capitalize() for word in cleaned.split())
+
+
 def _match_category_name(title: str, merchant: str) -> str:
     combined = f"{title} {merchant}".lower()
     if any(k in combined for k in ["grab", "gojek", "bluebird", "taxi", "parkir", "toll"]):
@@ -957,6 +1010,7 @@ def sync_bank_expenses(
                                 exp_date = today_str
                             merch = merch_m.group(1).strip() if merch_m else "BCA Transaction"
                             title = "Grab" if merch.upper().startswith("GRAB") else ("Shopee" if "SHOPEE" in merch.upper() else merch)
+                            title = normalize_title(title)
                             last4 = card_m.group(1)[-4:] if card_m else "3888"
                             if amt and (not target_dates or exp_date in target_dates):
                                 parsed_txs.append({
@@ -964,10 +1018,10 @@ def sync_bank_expenses(
                                     "title": title,
                                     "amount": amt,
                                     "expense_date": exp_date,
-                                    "payment_method": "BCA Krisflyer",
+                                    "payment_method": "BCA KrisFlyer",
                                     "category": _match_category_name(title, merch),
                                     "description": f"BCA Credit Card (..{last4}) at {merch}",
-                                    "paid_by": "wikra",
+                                    "paid_by": "Wikra",
                                 })
 
                     # Parse BNI
@@ -984,6 +1038,7 @@ def sync_bank_expenses(
                                 exp_date = today_str
                             merch = merch_m.group(1).strip() if merch_m else "BNI Transaction"
                             title = merch[5:].strip() if merch.startswith("QRIS-") else merch
+                            title = normalize_title(title)
                             card = card_m.group(1) if card_m else "BNI"
                             if amt and (not target_dates or exp_date in target_dates):
                                 parsed_txs.append({
@@ -994,7 +1049,7 @@ def sync_bank_expenses(
                                     "payment_method": "BNI Mastercard World",
                                     "category": _match_category_name(title, merch),
                                     "description": f"BNI Credit Card ({card}) at {merch}",
-                                    "paid_by": "wikra",
+                                    "paid_by": "Wikra",
                                 })
 
                     # Parse Mandiri
@@ -1014,6 +1069,7 @@ def sync_bank_expenses(
                                     pass
                             merch = penerima_m.group(1).strip() if penerima_m else "Mandiri Transaction"
                             title = "Indomaret" if "IDM QRIS" in merch or "INDOMARET" in merch.upper() else merch
+                            title = normalize_title(title)
                             sumber = sumber_m.group(1).strip() if sumber_m else "Mandiri"
                             ref_no = ref_m.group(1).strip() if ref_m else ""
                             if amt and (not target_dates or exp_date in target_dates):
@@ -1022,10 +1078,10 @@ def sync_bank_expenses(
                                     "title": title,
                                     "amount": amt,
                                     "expense_date": exp_date,
-                                    "payment_method": "Mandiri Marriot Bonvoy" if "Marriott" in sumber else sumber,
+                                    "payment_method": "Mandiri Marriott Bonvoy" if "Marriott" in sumber or "Marriot" in sumber else sumber,
                                     "category": _match_category_name(title, merch),
                                     "description": f"{sumber} at {merch} (Ref: {ref_no})",
-                                    "paid_by": "wikra",
+                                    "paid_by": "Wikra",
                                 })
 
         mail.logout()
