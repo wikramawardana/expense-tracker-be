@@ -1252,7 +1252,12 @@ impl ExpenseService {
             expense.expense_date = expense_date;
         }
         if let Some(description) = request.description {
-            expense.description = Some(description);
+            let trimmed = description.trim();
+            expense.description = if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            };
         }
         if let Some(status) = request.status {
             expense.status = status;
@@ -1276,7 +1281,12 @@ impl ExpenseService {
             expense.category_id = Some(category_id);
         }
         if let Some(paid_by) = request.paid_by {
-            expense.paid_by = Some(paid_by);
+            let trimmed = paid_by.trim();
+            expense.paid_by = if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            };
         }
         if let Some(ref recurrence_type_id) = request.recurrence_type_id {
             expense.recurrence_type_id = Some(recurrence_type_id.clone());
