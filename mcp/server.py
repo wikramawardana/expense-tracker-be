@@ -1121,16 +1121,16 @@ def sync_bank_expenses(
                     auto_create_bill_statement=True,
                 )
                 if res.get("ok"):
-                    ingested_records.append(res["data"]["expense"])
+                    ingested_records.append(res.get("expense", {}))
 
         # Build full summary for today so LLM does NOT need to run any code or additional queries
         today_expenses_res = get_expenses_today()
-        today_list = today_expenses_res.get("data", {}).get("expenses", []) if today_expenses_res.get("ok") else []
+        today_list = today_expenses_res.get("expenses", []) if today_expenses_res.get("ok") else []
         
         ctx_res = list_expense_context()
         categories_map = {}
         if ctx_res.get("ok"):
-            for c in ctx_res.get("data", {}).get("categories", []):
+            for c in ctx_res.get("categories", []):
                 categories_map[c["id"]] = c["name"]
 
         category_summary = {}
@@ -1191,13 +1191,13 @@ def get_today_summary(date_query: str = "today") -> dict[str, Any]:
         else:
             target_date = today_str
 
-        exp_res = list_expenses(expense_date_from=target_date, expense_date_to=target_date, limit=100)
-        exp_list = exp_res.get("data", {}).get("expenses", []) if exp_res.get("ok") else []
+        exp_res = list_expenses(date_from=target_date, date_to=target_date, limit=100)
+        exp_list = exp_res.get("expenses", []) if exp_res.get("ok") else []
 
         ctx_res = list_expense_context()
         categories_map = {}
         if ctx_res.get("ok"):
-            for c in ctx_res.get("data", {}).get("categories", []):
+            for c in ctx_res.get("categories", []):
                 categories_map[c["id"]] = c["name"]
 
         category_summary = {}
