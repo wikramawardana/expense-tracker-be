@@ -1020,7 +1020,7 @@ def sync_bank_expenses(
                                     "expense_date": exp_date,
                                     "payment_method": "BCA KrisFlyer",
                                     "category": _match_category_name(title, merch),
-                                    "description": f"BCA Credit Card (..{last4}) at {merch}",
+                                    "description": None,
                                     "paid_by": "Wikra",
                                 })
 
@@ -1048,7 +1048,7 @@ def sync_bank_expenses(
                                     "expense_date": exp_date,
                                     "payment_method": "BNI Mastercard World",
                                     "category": _match_category_name(title, merch),
-                                    "description": f"BNI Credit Card ({card}) at {merch}",
+                                    "description": None,
                                     "paid_by": "Wikra",
                                 })
 
@@ -1080,7 +1080,7 @@ def sync_bank_expenses(
                                     "expense_date": exp_date,
                                     "payment_method": "Mandiri Marriott Bonvoy" if "Marriott" in sumber or "Marriot" in sumber else sumber,
                                     "category": _match_category_name(title, merch),
-                                    "description": f"{sumber} at {merch} (Ref: {ref_no})",
+                                    "description": None,
                                     "paid_by": "Wikra",
                                 })
 
