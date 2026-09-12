@@ -15,7 +15,9 @@ Automates fetching transaction notification emails from BCA, BNI, and Mandiri vi
 
 ## Key Rules
 - **No Description**: Imported expenses must have `description=None` (empty). Do NOT populate descriptions with card/merchant/ref text.
-- **Deduplication**: Key format is `{expense_date[:10]}:{int(amount)}:{title[:10].lower()}`. Matches against existing SurrealDB rows to prevent duplicates.
+- **Deduplication**: 
+  1. **Intra-batch**: Drops identical bank duplicate emails (e.g. BNI sent twice within seconds) using `{bank}:{expense_date}:{tx_time}:{amount}:{raw_ref}`.
+  2. **Inter-batch**: Distinguishes distinct transactions on the same day with the same amount (e.g. multiple Grab rides) via merchant `raw_ref`, `tx_time`, and cardinality matching against existing SurrealDB rows.
 - **Status**: Imported bank expenses are set to status `pending` by default.
 
 ## Step-by-Step Procedure
@@ -23,18 +25,17 @@ Automates fetching transaction notification emails from BCA, BNI, and Mandiri vi
 ### 1. Test Sync Locally or on VPS (Dry Run)
 You can test the MCP bank sync function in dry-run mode without inserting records:
 ```bash
-ssh wikra@72.61.210.144 "python3 -c \"
-import sys
-sys.path.append('/home/wikra/production-projects/expense-tracker')
-from mcp.server import sync_bank_expenses
-print(sync_bank_expenses(dry_run=True, days=1))
+ssh wikra@72.61.210.144 "export EXPENSE_TRACKER_SURREAL_HTTP_URL=http://127.0.0.1:30800/sql; cd /home/wikra/production-projects/expense-tracker/mcp && /home/wikra/.hermes/hermes-agent/venv/bin/python -c \"
+import server, json
+res = server.sync_bank_expenses(dry_run=True, date_query='today')
+print(json.dumps(res, indent=2, default=str))
 \""
 ```
 
 ### 2. Verify VPS Scheduled Cronjob
 Check status of the scheduled daily bank sync cron:
 ```bash
-ssh wikra@72.61.210.144 "python3 -m hermes_cli.main --profile wikrassist-expense cron list"
+ssh wikra@72.61.210.144 "/home/wikra/.hermes/hermes-agent/venv/bin/python -m hermes_cli.main --profile wikrassist-expense cron list"
 ```
 The job `cf8c32d745a1` runs daily at `22:00 WIB` (`0 22 * * *`).
 

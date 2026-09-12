@@ -748,6 +748,8 @@ def create_expense(
     paid_by: str | None = None,
     status: str = "pending",
     auto_create_bill_statement: bool = True,
+    raw_ref: str | None = None,
+    tx_time: str | None = None,
 ) -> dict[str, Any]:
     """Create one expense. Resolve category/payment by exact name or id. Missing bill statement can be auto-created for the expense month."""
     try:
@@ -785,31 +787,34 @@ def create_expense(
 
         created_at = now_iso()
         owner_id = os.getenv("EXPENSE_OWNER_ID", DEFAULT_OWNER_ID)
-        expense = create_record(
-            "expenses",
-            {
-                "owner_id": owner_id,
-                "title": title,
-                "amount": float(amount),
-                "payment_method": payment_record["name"],
-                "payment_method_id": payment_record["id"],
-                "expense_date": expense_iso,
-                "description": clean_optional(description),
-                "status": status_storage,
-                "bill_statement": bill_record["name"],
-                "bill_statement_id": bill_record["id"],
-                "category_id": category_record["id"],
-                "paid_by": clean_optional(paid_by),
-                "recurrence_type": None,
-                "recurrence_type_id": None,
-                "recurrence_count": None,
-                "recurrence_current": None,
-                "recurrence_end_date": None,
-                "recurrence_group_id": None,
-                "created_at": created_at,
-                "updated_at": created_at,
-            },
-        )
+        expense_payload = {
+            "owner_id": owner_id,
+            "title": title,
+            "amount": float(amount),
+            "payment_method": payment_record["name"],
+            "payment_method_id": payment_record["id"],
+            "expense_date": expense_iso,
+            "description": clean_optional(description),
+            "status": status_storage,
+            "bill_statement": bill_record["name"],
+            "bill_statement_id": bill_record["id"],
+            "category_id": category_record["id"],
+            "paid_by": clean_optional(paid_by),
+            "recurrence_type": None,
+            "recurrence_type_id": None,
+            "recurrence_count": None,
+            "recurrence_current": None,
+            "recurrence_end_date": None,
+            "recurrence_group_id": None,
+            "created_at": created_at,
+            "updated_at": created_at,
+        }
+        if clean_optional(raw_ref):
+            expense_payload["raw_ref"] = clean_optional(raw_ref)
+        if clean_optional(tx_time):
+            expense_payload["tx_time"] = clean_optional(tx_time)
+
+        expense = create_record("expenses", expense_payload)
 
         return ok(
             {
@@ -976,7 +981,7 @@ def sync_bank_expenses(
         msg_ids = msg_nums[0].split()
         parsed_txs = []
 
-        for msg_id in msg_ids[-30:]:
+        for msg_id in msg_ids[-50:]:
             _, msg_data = mail.fetch(msg_id, "(RFC822)")
             for part in msg_data:
                 if isinstance(part, tuple):
@@ -1004,8 +1009,11 @@ def sync_bank_expenses(
                         amt_m = re.search(r"Sejumlah\s*:\s*(Rp\s*[0-9\.,]+)", body_text, re.I)
                         if amt_m and date_m:
                             amt = _parse_idr(amt_m.group(1))
+                            tx_time = ""
                             try:
-                                exp_date = datetime.strptime(date_m.group(1).strip(), "%d-%m-%Y %H:%M:%S").strftime("%Y-%m-%d")
+                                raw_dt = datetime.strptime(date_m.group(1).strip(), "%d-%m-%Y %H:%M:%S")
+                                exp_date = raw_dt.strftime("%Y-%m-%d")
+                                tx_time = raw_dt.strftime("%H:%M:%S")
                             except Exception:
                                 exp_date = today_str
                             merch = merch_m.group(1).strip() if merch_m else "BCA Transaction"
@@ -1022,6 +1030,8 @@ def sync_bank_expenses(
                                     "category": _match_category_name(title, merch),
                                     "description": None,
                                     "paid_by": "Wikra",
+                                    "raw_ref": merch,
+                                    "tx_time": tx_time,
                                 })
 
                     # Parse BNI
@@ -1032,8 +1042,11 @@ def sync_bank_expenses(
                         card_m = re.search(r"Nomor Kartu Kredit BNI\s*:\s*([A-Za-z0-9Xx]+)", body_text, re.I)
                         if amt_m and date_m:
                             amt = _parse_idr(amt_m.group(1))
+                            tx_time = ""
                             try:
-                                exp_date = datetime.strptime(date_m.group(1).strip(), "%d/%m/%Y %H:%M").strftime("%Y-%m-%d")
+                                raw_dt = datetime.strptime(date_m.group(1).strip(), "%d/%m/%Y %H:%M")
+                                exp_date = raw_dt.strftime("%Y-%m-%d")
+                                tx_time = raw_dt.strftime("%H:%M")
                             except Exception:
                                 exp_date = today_str
                             merch = merch_m.group(1).strip() if merch_m else "BNI Transaction"
@@ -1050,6 +1063,8 @@ def sync_bank_expenses(
                                     "category": _match_category_name(title, merch),
                                     "description": None,
                                     "paid_by": "Wikra",
+                                    "raw_ref": merch,
+                                    "tx_time": tx_time,
                                 })
 
                     # Parse Mandiri
@@ -1082,29 +1097,74 @@ def sync_bank_expenses(
                                     "category": _match_category_name(title, merch),
                                     "description": None,
                                     "paid_by": "Wikra",
+                                    "raw_ref": ref_no or merch,
+                                    "tx_time": "",
                                 })
 
         mail.logout()
 
-        # Query existing expenses in SurrealDB to deduplicate
-        existing_rows = surreal_query("SELECT expense_date, amount, title FROM expenses;")
-        existing_keys = set()
+        # 1. Intra-batch deduplication: filter out bank duplicate notifications (e.g. BNI sent twice seconds apart)
+        unique_batch_txs = []
+        batch_seen = set()
+        for tx in parsed_txs:
+            batch_k = (
+                f"{tx.get('bank', '')}:"
+                f"{tx.get('expense_date', '')}:"
+                f"{tx.get('tx_time', '')}:"
+                f"{int(tx.get('amount', 0))}:"
+                f"{str(tx.get('raw_ref', tx.get('title', ''))).lower().strip()}"
+            )
+            if batch_k in batch_seen:
+                continue
+            batch_seen.add(batch_k)
+            unique_batch_txs.append(tx)
+
+        # 2. Inter-batch deduplication against SurrealDB
+        existing_rows = surreal_query("SELECT expense_date, amount, title, raw_ref, tx_time FROM expenses;")
+        existing_ref_keys = set()
+        existing_counts = {}
+
         if existing_rows and isinstance(existing_rows[0], list):
             for row in existing_rows[0]:
                 ed = str(row.get("expense_date", ""))[:10]
                 am = int(float(row.get("amount", 0)))
                 ti = str(row.get("title", "")).lower().strip()[:10]
-                existing_keys.add(f"{ed}:{am}:{ti}")
+                ref = str(row.get("raw_ref") or "").strip().lower()
+                tm = str(row.get("tx_time") or "").strip()
 
+                if ref:
+                    existing_ref_keys.add(f"{ed}:{am}:{ref}")
+                if tm and ref:
+                    existing_ref_keys.add(f"{ed}:{tm}:{am}:{ref}")
+
+                c_key = f"{ed}:{am}:{ti}"
+                existing_counts[c_key] = existing_counts.get(c_key, 0) + 1
+
+        matched_counts = {}
         new_txs = []
-        skipped_count = 0
-        for tx in parsed_txs:
-            k = f"{tx['expense_date'][:10]}:{int(tx['amount'])}:{tx['title'].lower().strip()[:10]}"
-            if k in existing_keys:
-                skipped_count += 1
+        for tx in unique_batch_txs:
+            ed = tx["expense_date"][:10]
+            am = int(tx["amount"])
+            ti = tx["title"].lower().strip()[:10]
+            ref = str(tx.get("raw_ref") or "").strip().lower()
+            tm = str(tx.get("tx_time") or "").strip()
+            c_key = f"{ed}:{am}:{ti}"
+
+            is_ref_match = False
+            if ref and f"{ed}:{am}:{ref}" in existing_ref_keys:
+                is_ref_match = True
+            elif tm and ref and f"{ed}:{tm}:{am}:{ref}" in existing_ref_keys:
+                is_ref_match = True
+
+            if is_ref_match:
+                matched_counts[c_key] = matched_counts.get(c_key, 0) + 1
+            elif matched_counts.get(c_key, 0) < existing_counts.get(c_key, 0):
+                matched_counts[c_key] = matched_counts.get(c_key, 0) + 1
             else:
+                matched_counts[c_key] = matched_counts.get(c_key, 0) + 1
                 new_txs.append(tx)
-                existing_keys.add(k)  # prevent duplicate within same batch
+
+        skipped_count = len(parsed_txs) - len(new_txs)
 
         ingested_records = []
         if not dry_run:
@@ -1119,6 +1179,8 @@ def sync_bank_expenses(
                     paid_by=tx["paid_by"],
                     status="pending",
                     auto_create_bill_statement=True,
+                    raw_ref=tx.get("raw_ref"),
+                    tx_time=tx.get("tx_time"),
                 )
                 if res.get("ok"):
                     ingested_records.append(res.get("expense", {}))
