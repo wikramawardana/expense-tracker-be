@@ -981,7 +981,8 @@ def sync_bank_expenses(
         msg_ids = msg_nums[0].split()
         parsed_txs = []
 
-        for msg_id in msg_ids[-50:]:
+        lookback = 50 if (not date_query or date_query.lower() in ["today", "yesterday"]) else 150
+        for msg_id in msg_ids[-lookback:]:
             _, msg_data = mail.fetch(msg_id, "(RFC822)")
             for part in msg_data:
                 if isinstance(part, tuple):
