@@ -1075,6 +1075,7 @@ def sync_bank_expenses(
                         ref_m = re.search(r"No\.\s*Referensi\s*([0-9A-Za-z]+)", body_text, re.I)
                         sumber_m = re.search(r"Sumber Dana\s*([^:]+?)(?=\s*Simpan Bukti|$)", body_text, re.I)
                         date_m = re.search(r"Tanggal\s*([0-9]{1,2}\s+[A-Za-z]{3}\s+[0-9]{4})", body_text, re.I)
+                        jam_m = re.search(r"Jam\s*([0-9]{2}:[0-9]{2}(?::[0-9]{2})?)", body_text, re.I)
                         if amt_m:
                             amt = _parse_idr(amt_m.group(0).replace("Nominal Transaksi", ""))
                             exp_date = today_str
@@ -1083,9 +1084,14 @@ def sync_bank_expenses(
                                     exp_date = datetime.strptime(date_m.group(1).strip(), "%d %b %Y").strftime("%Y-%m-%d")
                                 except Exception:
                                     pass
+                            tx_time = jam_m.group(1).strip() if jam_m else ""
                             merch = penerima_m.group(1).strip() if penerima_m else "Mandiri Transaction"
-                            title = "Indomaret" if "IDM QRIS" in merch or "INDOMARET" in merch.upper() else merch
-                            title = normalize_title(title)
+                            if "IDM QRIS" in merch or "INDOMARET" in merch.upper():
+                                title = "Indomaret"
+                            elif "ALGO BEKASI" in merch.upper():
+                                title = "Algo Bekasi"
+                            else:
+                                title = normalize_title(merch)
                             sumber = sumber_m.group(1).strip() if sumber_m else "Mandiri"
                             ref_no = ref_m.group(1).strip() if ref_m else ""
                             if amt and (not target_dates or exp_date in target_dates):
@@ -1099,7 +1105,7 @@ def sync_bank_expenses(
                                     "description": None,
                                     "paid_by": "Wikra",
                                     "raw_ref": ref_no or merch,
-                                    "tx_time": "",
+                                    "tx_time": tx_time,
                                 })
 
         mail.logout()
