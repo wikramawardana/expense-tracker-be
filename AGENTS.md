@@ -16,7 +16,7 @@
 - **MCP Integration**:
   - File: `mcp/server.py` using FastMCP.
   - Exposes tools for Hermes Agent (`create_expense`, `list_expenses`, `sync_bank_expenses`, `get_today_summary`, `categorize_expense`).
-  - Production service: Systemd user service `hermes-gateway-wikrassist-expense.service`.
+  - Former production service `hermes-gateway-wikrassist-expense.service` was removed on 2026-09-29.
 
 ## 3. Core Guidelines & Data Rules
 1. **Bank Email Sync Rule**:
@@ -42,16 +42,10 @@
   python3 -m py_compile mcp/server.py
   ```
 
-## 5. Deployment & Production Infrastructure
-- **VPS Server**: `wikra@72.61.210.144` (accessible via SSH).
-- **Production MCP Directory**: `/home/wikra/production-projects/expense-tracker/mcp/server.py`.
-- **Systemd User Service**:
-  ```bash
-  ssh wikra@72.61.210.144 "systemctl --user status hermes-gateway-wikrassist-expense.service"
-  ssh wikra@72.61.210.144 "systemctl --user restart hermes-gateway-wikrassist-expense.service"
-  ```
-- **Scheduled Cron**:
-  - Job ID: `cf8c32d745a1` (Daily Bank Sync & Expense Summary at 22:00 WIB / `0 22 * * *`).
+## 5. Deployment Status
+- The expense tracker API, web app, and Hermes MCP deployment were retired from the VPS on 2026-09-29. The source repositories remain available.
+- Automated bank email sync to Google Sheets remains active in `/Users/wikra/MyProjects/expense-tracker/temporal-sync/` and on the VPS under `temporal-expense-sync-worker.service`.
+- The deployment workflow is preserved as `.github/workflows/deploy.yml.disabled` and does not run automatically.
 
 ## 6. Available Skills
 - `.agents/skills/bank-sync`: Runbook for testing, dry-running, and troubleshooting bank email sync.
